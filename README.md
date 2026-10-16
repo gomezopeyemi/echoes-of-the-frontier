@@ -188,7 +188,7 @@ Open `/?showcase` (also linked from the title screen) to inspect both characters
 - Geometry is cached per unique shape and materials are shared.
 - After mount, each joint's static pieces are baked into one mesh per material (`bakeJoints.js`). That takes the operative from 132 to 77 visible meshes and the droid from 136 to 65.
 - Only larger parts cast shadows. Cloth deformation touches 165 vertices.
-- A frame in the level is roughly 375 draw calls, including the shadow pass and post-processing.
+- A frame in the level is roughly 280–450 draw calls and 110–150K triangles, depending on the view. That includes the shadow pass and post-processing, measured with `renderer.info`.
 
 ### Remaining limitations
 
@@ -203,6 +203,51 @@ Open `/?showcase` (also linked from the title screen) to inspect both characters
 1. Export a rigged, licensed GLTF per character with the joint names above, or add a name map.
 2. Load it with `useGLTF` (drei) or `GLTFLoader`, then replace the primitive JSX in `OperativeModel.jsx` / `DroidModel.jsx` with the loaded scene. Keep the `apiRef` contract (`update`, `muzzle`, `setFlash`).
 3. Either keep the procedural animators by writing pose rotations onto the bones, or swap in an `AnimationMixer` and map driver state to clips. Gameplay code needs no changes.
+
+## Environment assets and credits
+
+The level uses a small set of licensed third-party assets. Sources, commits
+and every modification are listed in
+[`public/assets/env/ASSETS.md`](public/assets/env/ASSETS.md).
+
+- **Cargo containers:** 3D models and PBR textures by Juan Linietsky and
+  Fernando Miguel Calabró, from the [Godot TPS demo](https://github.com/godotengine/tps-demo),
+  licensed [CC-BY 3.0](https://creativecommons.org/licenses/by/3.0/). The
+  same source provides the tiling PBR sets: riveted panels on the habitat
+  walls, painted gun-metal on the roofs and fuel tanks, and anti-slip plate on
+  the landing pad.
+- **Boulder surface and ground relief:** ambientCG "Rock 020"
+  ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)).
+- **Boulder shapes:** generated in code (`src/world/rocks.js`). They are
+  noise-displaced, plane-fractured icospheres, textured triplanar in world
+  space.
+
+How it fits together:
+
+- **Collision is unchanged.** Every visual sits inside the collider that
+  `layout.js` already defines.
+- **Containers fit their colliders.** Each model is scaled to its collider's
+  width, and stretched no more than 12% along its length.
+- **Fallback and rollback.** While a container model loads, and if one is
+  removed, the original primitive container renders instead
+  (`ProceduralContainer` in `Structures.jsx`).
+- **Reflections.** Level materials share the characters' procedural night
+  reflection environment, at a lower strength (`levelIntensity` in
+  `Scene.jsx`). That keeps the metal parts of the PBR sets from rendering
+  black, without lifting the night.
+
+The tool used to extract the containers from the TPS demo level file is in
+`tools/asset-prep/` and documents its own temporary dependencies; it is not
+part of the build.
+
+Assets not used, and why:
+
+- **TPS demo player and enemy robots.** They are rigged and licensed, but they
+  are a different character design: a cartoon robot, and a rolling turret
+  robot. They have no melee, guard or stagger animations. Swapping them in
+  would replace the game's characters rather than improve them.
+- **Poly Haven, ambientCG, BlenderKit, Sketchfab and Kenney.** Their sites
+  could not be reached from the build environment.
 
 ## Architecture
 

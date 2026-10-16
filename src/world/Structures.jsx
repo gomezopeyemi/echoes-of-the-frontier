@@ -1,22 +1,27 @@
-import { useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
-import { MeshStandardMaterial } from 'three'
+import { Suspense, useMemo, useRef } from 'react'
+import { useFrame, useLoader } from '@react-three/fiber'
+import { Box3, BoxGeometry, CylinderGeometry, MeshStandardMaterial, Vector3 } from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { BOUNDS, LIGHT_POLES, OBSTACLES } from './layout'
-import { MAT, glow } from './materials'
+import { MAT, PANEL, glow } from './materials'
+import { boxUV, cylinderUV } from './pbr'
+import { getRockMaterial, makeRockGeometry } from './rocks'
 
-// Placeholder architecture built from primitives. Each type is a small
-// component so it can be swapped for a licensed/modelled asset later.
+// Level architecture. Each obstacle type is a small component drawn inside
+// the collider that layout.js defines, so visuals can change without
+// touching collision. Containers are licensed models (Godot TPS demo, CC-BY
+// 3.0); habitats and tanks are primitives surfaced with licensed tiling PBR
+// sets; boulders are generated meshes with ambientCG Rock020 (CC0).
+// Sources and licences: public/assets/env/ASSETS.md.
 
 function Hab({ x, z, w, d, h }) {
   const doorZ = d / 2 + 0.01
+  const body = useMemo(() => boxUV(new BoxGeometry(w, h, d), w, h, d, PANEL.rivetTile), [w, h, d])
+  const roof = useMemo(() => boxUV(new BoxGeometry(w + 0.4, 0.4, d + 0.4), w + 0.4, 0.4, d + 0.4, PANEL.gunMetalTile), [w, d])
   return (
     <group position={[x, 0, z]}>
-      <mesh castShadow receiveShadow position={[0, h / 2, 0]} material={MAT.hull}>
-        <boxGeometry args={[w, h, d]} />
-      </mesh>
-      <mesh castShadow position={[0, h + 0.2, 0]} material={MAT.hullDark}>
-        <boxGeometry args={[w + 0.4, 0.4, d + 0.4]} />
-      </mesh>
+      <mesh castShadow receiveShadow position={[0, h / 2, 0]} material={PANEL.rivet()} geometry={body} />
+      <mesh castShadow position={[0, h + 0.2, 0]} material={PANEL.gunMetal()} geometry={roof} />
       {/* Window band */}
       <mesh position={[0, h * 0.62, doorZ]} material={MAT.windowCyan}>
         <planeGeometry args={[w * 0.7, 0.35]} />
@@ -58,7 +63,8 @@ function Wall({ x, z, w, d, h }) {
   )
 }
 
-function Container({ x, z, w, d, h, color }) {
+/** Original primitive container: loading fallback, and rollback if the model is removed. */
+function ProceduralContainer({ x, z, w, d, h, color }) {
   const mat = useMemo(() => new MeshStandardMaterial({ color, roughness: 0.65, metalness: 0.55 }), [color])
   const alongX = w > d
   const len = alongX ? w : d
@@ -80,6 +86,55 @@ function Container({ x, z, w, d, h, color }) {
   )
 }
 
+// Layout colour -> container model. The models carry their own painted
+// livery; grey slots use the red-striped container because the grey texture
+// set was authored for a different (open-ended) mesh.
+const CONTAINER_MODELS = {
+  '#7a3b22': 'container_brown.glb',
+  '#2f5560': 'container_teal.glb',
+  '#4c4f55': 'container_red.glb',
+}
+const containerUrl = (color) => `${import.meta.env.BASE_URL}assets/env/tps-demo/${CONTAINER_MODELS[color] ?? 'container_red.glb'}`
+
+function ContainerModel({ x, z, w, d, color }) {
+  const gltf = useLoader(GLTFLoader, containerUrl(color))
+  const { object, scale, offset } = useMemo(() => {
+    const object = gltf.scene.clone()
+    object.traverse((o) => {
+      if (o.isMesh) {
+        o.castShadow = true
+        o.receiveShadow = true
+      }
+    })
+    // Fit the model to the collider: width exactly, height at the same scale,
+    // length to the collider but never stretched more than 12% beyond that.
+    const box = new Box3().setFromObject(object)
+    const size = box.getSize(new Vector3())
+    const centre = box.getCenter(new Vector3())
+    const width = Math.min(w, d)
+    const length = Math.max(w, d)
+    const sw = width / size.x
+    const sl = Math.min(length / size.z, sw * 1.12)
+    return { object, scale: [sw, sw, sl], offset: [-centre.x, -box.min.y, -centre.z] }
+  }, [gltf, w, d])
+  // Models are authored long along Z; turn them to match the collider.
+  return (
+    <group position={[x, 0, z]} rotation={[0, w > d ? Math.PI / 2 : 0, 0]}>
+      <group scale={scale}>
+        <primitive object={object} position={offset} />
+      </group>
+    </group>
+  )
+}
+
+function Container(props) {
+  return (
+    <Suspense fallback={<ProceduralContainer {...props} />}>
+      <ContainerModel {...props} />
+    </Suspense>
+  )
+}
+
 function Crate({ x, z, w, d, h }) {
   return (
     <group position={[x, 0, z]}>
@@ -95,11 +150,10 @@ function Crate({ x, z, w, d, h }) {
 
 function Tank({ x, z, w, h }) {
   const r = w / 2
+  const shell = useMemo(() => cylinderUV(new CylinderGeometry(r, r, h, 28), r, h, PANEL.gunMetalTile), [r, h])
   return (
     <group position={[x, 0, z]}>
-      <mesh castShadow receiveShadow position={[0, h / 2, 0]} material={MAT.hull}>
-        <cylinderGeometry args={[r, r, h, 28]} />
-      </mesh>
+      <mesh castShadow receiveShadow position={[0, h / 2, 0]} material={PANEL.tank()} geometry={shell} />
       <mesh castShadow position={[0, h, 0]} material={MAT.hull}>
         <sphereGeometry args={[r, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
       </mesh>
@@ -160,11 +214,32 @@ function Generator({ x, z, w, d, h }) {
 }
 
 function Rock({ x, z, w, d, h }) {
+  // Seeded from the position so each boulder keeps its shape between runs.
+  const geometry = useMemo(() => makeRockGeometry(Math.abs(Math.round(x * 31 + z * 17)) + 1), [x, z])
   return (
-    <mesh castShadow receiveShadow position={[x, h * 0.35, z]} scale={[w / 2, h / 1.6, d / 2]} rotation={[0.2, x * 0.3, 0.1]} material={MAT.rock}>
-      <dodecahedronGeometry args={[1, 0]} />
-    </mesh>
+    <mesh castShadow receiveShadow position={[x, h * 0.4, z]} scale={[w / 1.8, h / 1.35, d / 1.8]} rotation={[0, x * 0.3, 0]} geometry={geometry} material={getRockMaterial()} />
   )
+}
+
+/** Non-colliding scenery boulders beyond the playable perimeter (cheaper: lower detail, no shadow casting). */
+const SCENERY_ROCKS = [
+  [-52, 6, 7, 4.5, 6],
+  [-58, -22, 10, 6, 8],
+  [-49, 38, 6, 3.5, 5],
+  [55, -4, 9, 5, 7],
+  [51, 30, 6, 4, 6],
+  [60, -36, 11, 7, 9],
+  [-20, -55, 8, 5, 6],
+  [24, -58, 9, 6, 7],
+  [-30, 56, 7, 4, 5],
+  [18, 54, 8, 5, 6],
+]
+
+function SceneryRocks() {
+  const geos = useMemo(() => SCENERY_ROCKS.map((_, i) => makeRockGeometry(900 + i * 37, 3)), [])
+  return SCENERY_ROCKS.map(([x, z, w, h, d], i) => (
+    <mesh key={i} receiveShadow position={[x, h * 0.35, z]} scale={[w / 1.8, h / 1.35, d / 1.8]} rotation={[0, i * 1.7, 0]} geometry={geos[i]} material={getRockMaterial()} />
+  ))
 }
 
 const RENDERERS = { hab: Hab, wall: Wall, container: Container, crate: Crate, tank: Tank, tower: Tower, generator: Generator, rock: Rock }
@@ -220,6 +295,7 @@ export function Structures() {
         <LightPole key={i} {...l} />
       ))}
       <Perimeter />
+      <SceneryRocks />
     </>
   )
 }

@@ -65,10 +65,12 @@ function buildScene(preset) {
 
 /**
  * Builds a pre-filtered environment once and assigns it to the character
- * materials only. `asSceneEnvironment` additionally lights the whole scene with
- * it (the neutral showcase); the night-time level keeps its own lighting.
+ * materials. `asSceneEnvironment` additionally lights the whole scene with it
+ * at the same intensity (the neutral showcase). `levelIntensity` instead
+ * lights the rest of the scene with it at its own, lower strength (the night
+ * level: reflections for the PBR props without lifting the darkness).
  */
-export function CharacterEnvironment({ preset = 'studio', intensity = 1, asSceneEnvironment = false }) {
+export function CharacterEnvironment({ preset = 'studio', intensity = 1, asSceneEnvironment = false, levelIntensity = 0 }) {
   const gl = useThree((s) => s.gl)
   const scene = useThree((s) => s.scene)
   useEffect(() => {
@@ -77,15 +79,16 @@ export function CharacterEnvironment({ preset = 'studio', intensity = 1, asScene
     const env = pmrem.fromScene(src.scene, 0.02).texture
     src.dispose()
     applyCharacterEnvironment(env, intensity)
-    if (asSceneEnvironment) {
+    const sceneWide = asSceneEnvironment || levelIntensity > 0
+    if (sceneWide) {
       scene.environment = env
-      scene.environmentIntensity = intensity
+      scene.environmentIntensity = asSceneEnvironment ? intensity : levelIntensity
     }
     return () => {
-      if (asSceneEnvironment) scene.environment = null
+      if (sceneWide) scene.environment = null
       env.dispose()
       pmrem.dispose()
     }
-  }, [gl, scene, preset, intensity, asSceneEnvironment])
+  }, [gl, scene, preset, intensity, asSceneEnvironment, levelIntensity])
   return null
 }

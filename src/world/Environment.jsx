@@ -1,8 +1,8 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { BufferAttribute, BufferGeometry, CanvasTexture, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace } from 'three'
+import { BufferAttribute, BufferGeometry, CanvasTexture, MeshStandardMaterial, RepeatWrapping, SRGBColorSpace, TextureLoader, Vector2 } from 'three'
 import { runtime } from '../game/runtime'
-import { MAT } from './materials'
+import { MAT, PANEL } from './materials'
 import { SPAWN } from './layout'
 
 function makeGroundTexture() {
@@ -36,8 +36,22 @@ function makeGroundTexture() {
   return tex
 }
 
+// Fine surface relief for the regolith: the ambientCG Rock020 normal map
+// (CC0, public/assets/env/ASSETS.md) tiled every 3 m. three applies each
+// map's own repeat, so the colour keeps its broad 14 m variation.
+function groundRelief() {
+  const t = new TextureLoader().load(`${import.meta.env.BASE_URL}assets/env/ambientcg-rock020/rock020_normal.jpg`)
+  t.wrapS = t.wrapT = RepeatWrapping
+  t.repeat.set(260 / 3, 260 / 3)
+  t.anisotropy = 8
+  return t
+}
+
 function Ground() {
-  const mat = useMemo(() => new MeshStandardMaterial({ map: makeGroundTexture(), color: '#55504a', roughness: 0.97, metalness: 0.02 }), [])
+  const mat = useMemo(
+    () => new MeshStandardMaterial({ map: makeGroundTexture(), normalMap: groundRelief(), normalScale: new Vector2(0.7, 0.7), color: '#55504a', roughness: 0.97, metalness: 0.02 }),
+    []
+  )
   return (
     <>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow material={mat}>
@@ -47,7 +61,7 @@ function Ground() {
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, -4]} receiveShadow material={MAT.concrete}>
         <planeGeometry args={[52, 30]} />
       </mesh>
-      <mesh position={[SPAWN.x, 0.06, SPAWN.z]} receiveShadow material={MAT.hullDark}>
+      <mesh position={[SPAWN.x, 0.06, SPAWN.z]} receiveShadow material={PANEL.deck()}>
         <cylinderGeometry args={[4.5, 4.8, 0.12, 48]} />
       </mesh>
       <mesh position={[SPAWN.x, 0.125, SPAWN.z]} rotation={[-Math.PI / 2, 0, 0]} material={MAT.cyan}>

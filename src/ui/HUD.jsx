@@ -157,8 +157,10 @@ function ControlsHint() {
       <span><kbd>WASD</kbd> Move</span>
       <span><kbd>Shift</kbd> Sprint</span>
       <span><kbd>Mouse</kbd> Aim</span>
-      <span><kbd>LMB</kbd> Fire</span>
-      <span><kbd>Space</kbd> Evade</span>
+      <span><kbd>LMB</kbd> Pistol</span>
+      <span><kbd>RMB</kbd>/<kbd>F</kbd> Blade</span>
+      <span><kbd>Q</kbd> Guard</span>
+      <span><kbd>Space</kbd> Dash</span>
       <span><kbd>E</kbd> Interact</span>
       <span><kbd>Esc</kbd> Pause</span>
     </div>

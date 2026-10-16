@@ -29,8 +29,8 @@ export function Projectiles() {
         pr.life -= dt
         chest.set(player.position.x, 1.1, player.position.z)
         if (pr.pos.distanceTo(chest) < 0.75 && !player.invulnerable) {
-          game.damagePlayer(DROID.projectileDamage)
-          spawnSpark(pr.pos, '#ff7a3c', 1.2)
+          const { blocked } = game.damagePlayer(DROID.projectileDamage, { blockable: true })
+          spawnSpark(pr.pos, blocked ? '#9cc8ff' : '#ff7a3c', 1.2)
           pr.active = false
         } else if (pr.life <= 0 || pr.pos.y < 0 || pointInColliders(pr.pos)) {
           spawnSpark(pr.pos, '#ff9a3c', 0.7)

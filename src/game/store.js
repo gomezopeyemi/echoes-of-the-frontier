@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { DROID, PLAYER } from './config'
 import { BRIEFING, TRANSMISSIONS } from './mission'
+import { applyDroidHit, destroyDroid } from './droidAI'
 import { resetRuntime, runtime } from './runtime'
 import { input, unlockPointer } from './input'
 import { audio } from '../audio/audio'
@@ -103,30 +104,44 @@ export const useGame = create((set, get) => ({
     set((s) => ({ stats: { ...s.stats, shotsFired: s.stats.shotsFired + 1, shotsHit: s.stats.shotsHit + (hit ? 1 : 0) } }))
   },
 
+  /** Returns { staggered } so callers can add feedback. */
   damageDroid(amount, crit = false) {
     const s = get()
-    if (s.droidStatus === 'destroyed' || s.phase !== 'playing') return
-    runtime.droid.alerted = true
+    if (s.droidStatus === 'destroyed' || s.phase !== 'playing') return { staggered: false }
     const hp = Math.max(0, s.droidHealth - amount)
+    const staggered = hp > 0 && applyDroidHit(runtime.droid, amount)
+    if (staggered) audio.stagger()
     set({ droidHealth: hp, hitMarker: s.hitMarker + 1, lastHitCrit: crit })
     if (hp / DROID.maxHealth < DROID.enrageThreshold && !runtime.droid.enraged && hp > 0) {
       runtime.droid.enraged = true
       get().say(TRANSMISSIONS.enraged, 4000)
     }
     if (hp <= 0) {
-      runtime.droid.state = 'destroyed'
-      runtime.droid.timer = 0
+      destroyDroid(runtime.droid)
       audio.explosion()
       set({ droidStatus: 'destroyed', stage: 'extract' })
       get().say(TRANSMISSIONS.destroyed, 7000)
     }
+    return { staggered }
   },
 
-  damagePlayer(amount) {
+  /**
+   * Apply damage to the player. Droid attacks are `blockable`: holding guard
+   * absorbs most of it and skips the hit reaction. Returns { applied, blocked }.
+   */
+  damagePlayer(amount, { blockable = false } = {}) {
     const s = get()
-    if (s.phase !== 'playing' || runtime.player.invulnerable) return
+    const p = runtime.player
+    if (s.phase !== 'playing' || p.invulnerable) return { applied: false, blocked: false }
+    const blocked = blockable && p.guarding
+    if (blocked) {
+      amount *= PLAYER.guardDamageMultiplier
+      audio.block()
+    } else {
+      p.hitT = 0
+      audio.hurt()
+    }
     const hp = Math.max(0, s.playerHealth - amount)
-    audio.hurt()
     set({
       playerHealth: hp,
       hurtCount: s.hurtCount + 1,
@@ -134,6 +149,7 @@ export const useGame = create((set, get) => ({
     })
     if (hp > 0 && hp <= 30) get().warnOnce('lowHealth')
     if (hp <= 0) get().endMission('defeat')
+    return { applied: true, blocked }
   },
 
   endMission(result) {
@@ -153,4 +169,4 @@ export const useGame = create((set, get) => ({
   },
 }))
 
-if (import.meta.env.DEV) window.__echoes = { useGame, runtime }
+if (import.meta.env.DEV && typeof window !== 'undefined') window.__echoes = { useGame, runtime }

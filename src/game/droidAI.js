@@ -3,18 +3,22 @@ import { DROID, PLAYER } from './config'
 import { circleBlocked, resolveCircle } from './collision'
 import { turnTowards } from './combat'
 
-// Finite-state machine for the security droid.
+// Finite-state machine for the security droid (a walking biped).
 //
 //   dormant ─(detect / shot / terminal)→ booting → chase
 //   chase → windup → strike → recover → chase        (melee, telegraphed)
 //   chase → charging → (fires plasma bolt) → chase    (ranged, telegraphed)
+//   chase | windup | recover | charging → stagger     (poise broken by damage)
 //   any   → destroyed                                 (health reaches 0)
 //
 // `ctx` supplies side effects so this module stays free of rendering/store code.
+// The animator reads `state`, `stateT`, `speed`, `hitT` and `fireT`.
 
 const desired = new Vector3()
 const steer = new Vector3()
+const before = new Vector3()
 const PROBE_ANGLES = [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8]
+const INTERRUPTIBLE = new Set(['chase', 'windup', 'recover', 'charging'])
 
 function steerAround(pos, dir, radius, out) {
   for (const a of PROBE_ANGLES) {
@@ -27,11 +31,38 @@ function steerAround(pos, dir, radius, out) {
   return out.copy(dir)
 }
 
-const damp = (current, target, rate, dt) => current + (target - current) * (1 - Math.exp(-rate * dt))
+function enter(d, state, timer = 0) {
+  d.state = state
+  d.stateT = 0
+  d.timer = timer
+}
+
+/** Register damage on the droid. Returns true if this hit broke its poise (stagger). */
+export function applyDroidHit(d, amount) {
+  if (d.state === 'destroyed') return false
+  d.hitT = 0
+  d.alerted = true
+  d.poise += amount
+  if (d.poise >= DROID.staggerPoise && INTERRUPTIBLE.has(d.state)) {
+    d.poise = 0
+    enter(d, 'stagger', DROID.staggerTime)
+    return true
+  }
+  return false
+}
+
+export function destroyDroid(d) {
+  enter(d, 'destroyed')
+}
 
 export function updateDroid(d, player, dt, ctx) {
   d.timer -= dt
+  d.stateT += dt
+  d.hitT += dt
+  d.fireT += dt
   d.rangedCooldown = Math.max(0, d.rangedCooldown - dt)
+  d.poise = Math.max(0, d.poise - DROID.poiseRegen * dt)
+  before.copy(d.position)
 
   const dx = player.position.x - d.position.x
   const dz = player.position.z - d.position.z
@@ -42,30 +73,26 @@ export function updateDroid(d, player, dt, ctx) {
   switch (d.state) {
     case 'dormant':
       if (d.alerted || dist < DROID.detectionRange) {
-        d.state = 'booting'
-        d.timer = DROID.bootTime
+        enter(d, 'booting', DROID.bootTime)
         ctx.onActivate()
       }
       break
 
     case 'booting':
-      d.position.y = damp(d.position.y, DROID.hoverHeight, 2.5, dt)
-      d.facing = turnTowards(d.facing, toPlayerAngle, 2 * dt)
-      if (d.timer <= 0) d.state = 'chase'
+      // The optic locks on before the body turns.
+      if (d.stateT > 0.6) d.facing = turnTowards(d.facing, toPlayerAngle, 2 * dt)
+      if (d.timer <= 0) enter(d, 'chase')
       break
 
     case 'chase': {
-      d.position.y = damp(d.position.y, DROID.hoverHeight, 4, dt)
-      d.facing = turnTowards(d.facing, toPlayerAngle, 5 * dt)
+      d.facing = turnTowards(d.facing, toPlayerAngle, 4 * dt)
       if (dist < DROID.meleeRange) {
-        d.state = 'windup'
-        d.timer = DROID.windup / pace
+        enter(d, 'windup', DROID.windup / pace)
         ctx.onWindup()
         break
       }
       if (dist > DROID.rangedMin && dist < DROID.rangedMax && d.rangedCooldown <= 0 && ctx.lineOfSight()) {
-        d.state = 'charging'
-        d.timer = DROID.chargeTime / pace
+        enter(d, 'charging', DROID.chargeTime / pace)
         ctx.onCharge()
         break
       }
@@ -79,10 +106,9 @@ export function updateDroid(d, player, dt, ctx) {
     }
 
     case 'windup':
-      d.facing = turnTowards(d.facing, toPlayerAngle, 8 * dt)
+      d.facing = turnTowards(d.facing, toPlayerAngle, 6 * dt)
       if (d.timer <= 0) {
-        d.state = 'strike'
-        d.timer = DROID.strikeDuration
+        enter(d, 'strike', DROID.strikeDuration)
         d.hitApplied = false
         if (dist > 1e-3) d.strikeDir.set(dx / dist, 0, dz / dist)
         else d.strikeDir.set(-Math.sin(d.facing), 0, -Math.cos(d.facing))
@@ -97,29 +123,33 @@ export function updateDroid(d, player, dt, ctx) {
         d.hitApplied = true
         ctx.meleeHit(d.strikeDir)
       }
-      if (d.timer <= 0) {
-        d.state = 'recover'
-        d.timer = DROID.recover / pace
-      }
+      if (d.timer <= 0) enter(d, 'recover', DROID.recover / pace)
       break
 
     case 'recover':
-      if (d.timer <= 0) d.state = 'chase'
+      if (d.timer <= 0) enter(d, 'chase')
       break
 
     case 'charging':
-      d.facing = turnTowards(d.facing, toPlayerAngle, 6 * dt)
+      d.facing = turnTowards(d.facing, toPlayerAngle, 5 * dt)
       if (d.timer <= 0) {
         ctx.fire()
+        d.fireT = 0
         d.rangedCooldown = DROID.rangedCooldown / pace
-        d.state = 'chase'
+        enter(d, 'chase')
       }
       break
 
+    case 'stagger':
+      if (d.timer <= 0) enter(d, 'chase')
+      break
+
     case 'destroyed':
-      d.position.y = Math.max(DROID.restHeight - 0.15, d.position.y - 2.5 * dt)
+      d.speed = 0
       return
   }
+
+  d.speed = dt > 0 ? Math.hypot(d.position.x - before.x, d.position.z - before.z) / dt : 0
 
   // Never let the droid overlap the player's body.
   if (d.state !== 'dormant' && dist < DROID.radius + PLAYER.radius && dist > 1e-3) {

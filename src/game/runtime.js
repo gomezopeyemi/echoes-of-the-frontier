@@ -13,12 +13,24 @@ const makeRuntime = () => ({
     invulnerable: false,
     dodgeReady: 1,
     moving: false,
+    guarding: false,
+    hitT: 99, // seconds since the last hit taken (drives the hit reaction)
+    defeatT: 0,
+    attackT: null, // energy blade swing clock (null when not attacking)
+    dashT: null,
+    muzzle: new Vector3(SPAWN.x, 1.3, SPAWN.z), // pistol muzzle, world space (updated from the model)
   },
   droid: {
-    position: new Vector3(DROID_HOME.x, DROID.restHeight, DROID_HOME.z),
+    position: new Vector3(DROID_HOME.x, 0, DROID_HOME.z),
     facing: 0,
     state: 'dormant',
+    stateT: 0, // seconds in the current state (drives animation)
     timer: 0,
+    speed: 0,
+    poise: 0,
+    hitT: 99,
+    fireT: 99,
+    muzzle: new Vector3(DROID_HOME.x, DROID.muzzleHeight, DROID_HOME.z),
     rangedCooldown: 1.5,
     strikeDir: new Vector3(),
     hitApplied: false,

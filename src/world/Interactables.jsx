@@ -140,7 +140,7 @@ function ObjectiveMarker() {
     const target = objectiveTarget(stage, runtime.droid.position)
     ref.current.visible = !!target && phase === 'playing'
     if (!target) return
-    const lift = stage === 'encounter' ? runtime.droid.position.y + 1.6 : 3
+    const lift = stage === 'encounter' ? 2.75 : 3
     ref.current.position.set(target.x, lift + Math.sin(clock.elapsedTime * 2.5) * 0.15, target.z)
     ref.current.rotation.y = clock.elapsedTime * 1.5
     ref.current.material.color.setRGB(stage === 'encounter' ? 5 : 4, stage === 'encounter' ? 0.5 : 2.2, stage === 'encounter' ? 0.3 : 0.6)

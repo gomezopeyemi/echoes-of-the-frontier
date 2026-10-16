@@ -61,3 +61,32 @@ export function turnTowards(a, b, maxStep) {
   if (Math.abs(diff) <= maxStep) return b
   return a + Math.sign(diff) * maxStep
 }
+
+/** Is `target` inside a melee arc in front of `origin` (XZ plane)? facing uses the model convention (0 = -Z). */
+export function inMeleeArc(origin, facing, target, range, arcCos) {
+  const dx = target.x - origin.x
+  const dz = target.z - origin.z
+  const dist = Math.hypot(dx, dz)
+  if (dist > range) return false
+  if (dist < 1e-4) return true
+  const fx = -Math.sin(facing)
+  const fz = -Math.cos(facing)
+  return (dx * fx + dz * fz) / dist >= arcCos
+}
+
+/**
+ * Nearest ray hit against a stack of spheres anchored at `base` (e.g. a character's feet).
+ * Returns the distance along the ray, or null.
+ */
+export function raycastSpheres(ray, base, spheres, sphereObj, hitOut) {
+  let best = null
+  for (const s of spheres) {
+    sphereObj.center.set(base.x, base.y + s.y, base.z)
+    sphereObj.radius = s.r
+    if (ray.intersectSphere(sphereObj, hitOut)) {
+      const t = hitOut.distanceTo(ray.origin)
+      if (best === null || t < best) best = t
+    }
+  }
+  return best
+}

@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Ray, Vector3 } from 'three'
 import { DROID } from '../src/game/config'
+import { Sphere } from 'three'
 import { buildColliders, hasLineOfSight, raycastWorld, resolveCircle } from '../src/game/collision'
-import { applyDamage, calculateDamage, Cooldown, turnTowards } from '../src/game/combat'
-import { updateDroid } from '../src/game/droidAI'
+import { applyDamage, calculateDamage, Cooldown, inMeleeArc, raycastSpheres, turnTowards } from '../src/game/combat'
+import { applyDroidHit, updateDroid } from '../src/game/droidAI'
 
 describe('combat', () => {
   it('applies falloff and crits', () => {
@@ -34,6 +35,25 @@ describe('combat', () => {
   })
 })
 
+describe('melee and hit volumes', () => {
+  it('blade arc only hits in front and in range', () => {
+    const o = new Vector3(0, 0, 0)
+    expect(inMeleeArc(o, 0, new Vector3(0, 0, -2), 2.4, 0.45)).toBe(true) // facing -Z
+    expect(inMeleeArc(o, 0, new Vector3(0, 0, 2), 2.4, 0.45)).toBe(false) // behind
+    expect(inMeleeArc(o, 0, new Vector3(2, 0, -0.2), 2.4, 0.45)).toBe(false) // beside
+    expect(inMeleeArc(o, 0, new Vector3(0, 0, -3), 2.4, 0.45)).toBe(false) // too far
+    expect(inMeleeArc(o, Math.PI / 2, new Vector3(-2, 0, 0), 2.4, 0.45)).toBe(true) // turned left
+  })
+
+  it('ray hits the stacked hit spheres of a standing droid', () => {
+    const ray = new Ray(new Vector3(0, 1.4, 10), new Vector3(0, 0, -1))
+    const t = raycastSpheres(ray, new Vector3(0, 0, 0), DROID.hitSpheres, new Sphere(), new Vector3())
+    expect(t).toBeCloseTo(10 - 0.5, 1)
+    const over = new Ray(new Vector3(0, 3, 10), new Vector3(0, 0, -1))
+    expect(raycastSpheres(over, new Vector3(), DROID.hitSpheres, new Sphere(), new Vector3())).toBeNull()
+  })
+})
+
 describe('collision', () => {
   const box = buildColliders([{ x: 0, z: 0, w: 2, d: 2, h: 2 }])
 
@@ -61,10 +81,15 @@ describe('collision', () => {
 
 describe('droid AI', () => {
   const makeDroid = (x = 0, z = 0) => ({
-    position: new Vector3(x, DROID.restHeight, z),
+    position: new Vector3(x, 0, z),
     facing: 0,
     state: 'dormant',
+    stateT: 0,
     timer: 0,
+    speed: 0,
+    poise: 0,
+    hitT: 99,
+    fireT: 99,
     rangedCooldown: 0,
     strikeDir: new Vector3(),
     hitApplied: false,
@@ -121,6 +146,31 @@ describe('droid AI', () => {
     run(d, player, ctx, DROID.chargeTime + 0.05)
     expect(ctx.fire).toHaveBeenCalledOnce()
     expect(d.rangedCooldown).toBeGreaterThan(0)
+  })
+
+  it('staggers when poise breaks, interrupting a wind-up', () => {
+    const d = makeDroid(origin.x, origin.z)
+    d.state = 'windup'
+    d.timer = 1
+    expect(applyDroidHit(d, DROID.staggerPoise - 5)).toBe(false)
+    expect(applyDroidHit(d, 10)).toBe(true)
+    expect(d.state).toBe('stagger')
+    const ctx = makeCtx()
+    const player = { position: new Vector3(origin.x, 0, origin.z + 1.5) }
+    run(d, player, ctx, DROID.staggerTime * 0.5)
+    expect(d.state).toBe('stagger')
+    expect(ctx.meleeHit).not.toHaveBeenCalled()
+    run(d, player, ctx, DROID.staggerTime * 0.6)
+    expect(d.state).not.toBe('stagger')
+  })
+
+  it('stays on the ground and reports walking speed while chasing', () => {
+    const d = makeDroid(origin.x, origin.z)
+    d.state = 'chase'
+    const player = { position: new Vector3(origin.x, 0, origin.z + 5) }
+    run(d, player, { ...makeCtx(), lineOfSight: () => false }, 0.2)
+    expect(d.position.y).toBe(0)
+    expect(d.speed).toBeCloseTo(DROID.chaseSpeed, 0)
   })
 
   it('does nothing once destroyed', () => {

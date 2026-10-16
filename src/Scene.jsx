@@ -1,5 +1,7 @@
 import { Bloom, EffectComposer, Noise, ToneMapping, Vignette } from '@react-three/postprocessing'
 import { BlendFunction, ToneMappingMode } from 'postprocessing'
+import { CharacterEnvironment } from './characters/CharacterEnvironment'
+import { CharacterFillLight } from './characters/CharacterFillLight'
 import { Effects } from './entities/Effects'
 import { Player } from './entities/Player'
 import { Projectiles } from './entities/Projectiles'
@@ -12,6 +14,9 @@ export function Scene() {
   return (
     <>
       <Environment />
+      {/* Reflections for character metals/visor only; the level keeps its night lighting. */}
+      <CharacterEnvironment intensity={0.55} />
+      <CharacterFillLight />
       <Structures />
       <Interactables />
       <Player />

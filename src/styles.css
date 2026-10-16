@@ -475,3 +475,55 @@ h1 span {
   .objective, .vitals { min-width: 0; width: calc(100vw - 48px); }
   .stats { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ---------- Character showcase ---------- */
+.showcase-panel {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 14px 16px;
+  background: rgba(10, 12, 16, 0.78);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(6px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.showcase-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.chip.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.showcase-back {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 4px;
+}
+.showcase-link {
+  display: inline-block;
+  margin-top: 22px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  text-decoration: none;
+  pointer-events: auto;
+}
+.showcase-link:hover {
+  color: var(--accent);
+}

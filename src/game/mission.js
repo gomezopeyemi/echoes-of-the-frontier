@@ -19,7 +19,7 @@ export const BRIEFING = [
 
 export const TRANSMISSIONS = {
   terminal: { speaker: 'TERMINAL', text: 'SECURITY OVERRIDE ACCEPTED. Unregistered personnel detected. Dispatching K7.' },
-  activate: { speaker: 'COMMAND', text: 'That droid has you flagged as hostile. Put it down. Dodge the strikes, keep your distance.' },
+  activate: { speaker: 'COMMAND', text: 'That droid has you flagged as hostile. Put it down. Evade or guard its strikes, and use the blade to break its balance.' },
   enraged: { speaker: 'SYSTEM', text: 'K7 core overheating. Attack frequency increasing.' },
   destroyed: { speaker: 'COMMAND', text: 'Threat neutralized. Extraction beacon is live past the north wall. Move.' },
   hazard: { speaker: 'SUIT', text: 'Warning: exposed power conduit. Arc discharge detected.' },

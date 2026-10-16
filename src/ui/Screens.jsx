@@ -38,10 +38,15 @@ function Title() {
           <span><kbd>WASD</kbd> move</span>
           <span><kbd>Shift</kbd> sprint</span>
           <span><kbd>Mouse</kbd> look / aim</span>
-          <span><kbd>LMB</kbd> fire</span>
-          <span><kbd>Space</kbd> evade (invulnerable)</span>
+          <span><kbd>LMB</kbd> energy pistol</span>
+          <span><kbd>RMB</kbd> / <kbd>F</kbd> energy blade</span>
+          <span><kbd>Q</kbd> (hold) guard</span>
+          <span><kbd>Space</kbd> combat dash (invulnerable)</span>
           <span><kbd>E</kbd> interact</span>
         </div>
+        <a className="showcase-link" href="?showcase">
+          Character showcase →
+        </a>
       </div>
     </div>
   )

@@ -52,7 +52,9 @@ export function attachInput() {
   }
   const mdown = (e) => {
     if (e.button === 0) mouse.fire = true
+    if (e.button === 2) pressed.add('Mouse2')
   }
+  const noMenu = (e) => e.preventDefault()
   const mup = (e) => {
     if (e.button === 0) mouse.fire = false
   }
@@ -63,6 +65,7 @@ export function attachInput() {
   window.addEventListener('mousedown', mdown)
   window.addEventListener('mouseup', mup)
   window.addEventListener('blur', blur)
+  window.addEventListener('contextmenu', noMenu)
   document.addEventListener('pointerlockchange', lockChange)
   return () => {
     document.removeEventListener('pointerlockchange', lockChange)
@@ -72,6 +75,7 @@ export function attachInput() {
     window.removeEventListener('mousedown', mdown)
     window.removeEventListener('mouseup', mup)
     window.removeEventListener('blur', blur)
+    window.removeEventListener('contextmenu', noMenu)
   }
 }
 

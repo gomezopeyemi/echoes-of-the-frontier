@@ -1,14 +1,15 @@
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { DoubleSide, Ray, Sphere, Vector3 } from 'three'
+import { Ray, Sphere, Vector3 } from 'three'
 import { CAMERA, DROID, HAZARD_DPS, PLAYER } from '../game/config'
 import { raycastWorld, resolveCircle } from '../game/collision'
-import { calculateDamage, Cooldown, turnTowards } from '../game/combat'
+import { calculateDamage, Cooldown, inMeleeArc, raycastSpheres, turnTowards } from '../game/combat'
 import { input } from '../game/input'
 import { runtime, spawnSpark, spawnTracer } from '../game/runtime'
 import { useGame } from '../game/store'
 import { BEACON, HAZARD, LOG_SPOTS, TERMINAL } from '../world/layout'
-import { MAT, glow } from '../world/materials'
+import { OperativeModel } from '../characters/operative/OperativeModel'
+import { createOperativeDriver } from '../characters/operative/operativeAnimator'
 import { audio } from '../audio/audio'
 
 const fwd = new Vector3()
@@ -18,13 +19,13 @@ const target = new Vector3()
 const pivot = new Vector3()
 const camDir = new Vector3()
 const camPos = new Vector3()
-const muzzlePos = new Vector3()
 const hitPoint = new Vector3()
+const tmp = new Vector3()
 const ray = new Ray()
-const droidSphere = new Sphere(new Vector3(), DROID.radius)
-const flashMat = glow(3, 4, 5, { transparent: true, opacity: 0, side: DoubleSide, depthWrite: false })
+const hitSphere = new Sphere()
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
+const wrapAngle = (a) => Math.atan2(Math.sin(a), Math.cos(a))
 
 function nearestInteractable(pos, stage, collected) {
   if (stage === 'deploy' && Math.hypot(pos.x - TERMINAL.x, pos.z - TERMINAL.z) < PLAYER.interactRange) return 'terminal'
@@ -37,22 +38,23 @@ function nearestInteractable(pos, stage, collected) {
 export function Player() {
   const root = useRef()
   const model = useRef()
-  const legL = useRef()
-  const legR = useRef()
-  const muzzle = useRef()
-  const flash = useRef()
   const camera = useThree((s) => s.camera)
+  const driver = useMemo(() => createOperativeDriver(), [])
   const s = useRef({
     fireCd: new Cooldown(PLAYER.fireCooldown),
     dodgeCd: new Cooldown(PLAYER.dodgeCooldown),
+    bladeCd: new Cooldown(PLAYER.bladeCooldown),
     dodgeTime: 0,
+    dashT: null,
     dodgeDir: new Vector3(),
+    attackT: null,
+    attackHitDone: false,
     facing: 0,
     aimTimer: 0,
     flashT: 0,
     hazardAcc: 0,
-    stride: 0,
     camDist: CAMERA.distance,
+    settled: false,
   }).current
 
   function shoot(game) {
@@ -62,18 +64,14 @@ export function Player() {
     let hitDroid = false
     const d = runtime.droid
     if (d.state !== 'destroyed') {
-      droidSphere.center.copy(d.position)
-      if (ray.intersectSphere(droidSphere, hitPoint)) {
-        const td = hitPoint.distanceTo(ray.origin)
-        if (td < t) {
-          t = td
-          hitDroid = true
-        }
+      const td = raycastSpheres(ray, d.position, DROID.hitSpheres, hitSphere, hitPoint)
+      if (td !== null && td < t) {
+        t = td
+        hitDroid = true
       }
     }
     ray.at(t, hitPoint)
-    muzzle.current.getWorldPosition(muzzlePos)
-    spawnTracer(muzzlePos, hitPoint)
+    spawnTracer(runtime.player.muzzle, hitPoint)
     s.flashT = 0.06
     audio.shot()
     if (hitDroid) {
@@ -90,6 +88,19 @@ export function Player() {
       spawnSpark(hitPoint, '#8fd3ff', 0.5)
     }
     game.registerShot(hitDroid)
+  }
+
+  /** Single hit check per swing, at the strike frame of the animation. */
+  function bladeHit(game) {
+    const d = runtime.droid
+    const p = runtime.player.position
+    if (d.state === 'destroyed') return
+    if (!inMeleeArc(p, s.facing, d.position, PLAYER.bladeRange + DROID.radius * 0.5, PLAYER.bladeArcCos)) return
+    const dmg = calculateDamage({ base: PLAYER.bladeDamage, critChance: PLAYER.critChance, critMultiplier: 1.5 })
+    game.damageDroid(dmg.amount, dmg.crit)
+    tmp.set(d.position.x, 1.4, d.position.z).lerp(pivot.set(p.x, 1.4, p.z), 0.35)
+    spawnSpark(tmp, '#9cc8ff', dmg.crit ? 0.8 : 0.6)
+    audio.bladeHit()
   }
 
   useFrame((state, rawDt) => {
@@ -110,21 +121,37 @@ export function Player() {
     fwd.set(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw))
     right.set(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw))
 
-    // --- Move / dodge ---
-    let moving = false
+    // --- Actions & movement ---
+    const attacking = s.attackT !== null
+    const dodging = s.dodgeTime > 0
+    p.hitT += dt
     if (playing) {
       s.fireCd.tick(dt)
       s.dodgeCd.tick(dt)
+      s.bladeCd.tick(dt)
       const f = (input.isDown('KeyW') || input.isDown('ArrowUp') ? 1 : 0) - (input.isDown('KeyS') || input.isDown('ArrowDown') ? 1 : 0)
       const r = (input.isDown('KeyD') || input.isDown('ArrowRight') ? 1 : 0) - (input.isDown('KeyA') || input.isDown('ArrowLeft') ? 1 : 0)
       move.set(0, 0, 0).addScaledVector(fwd, f).addScaledVector(right, r)
-      moving = move.lengthSq() > 0
+      const moving = move.lengthSq() > 0
       if (moving) move.normalize()
 
-      if (input.consumePressed('Space') && s.dodgeCd.ready()) {
+      p.guarding = input.isDown('KeyQ') && !dodging && !attacking
+
+      const bladePressed = input.consumePressed('Mouse2') || input.consumePressed('KeyF')
+      if (bladePressed && !attacking && !dodging && !p.guarding && s.bladeCd.ready()) {
+        s.attackT = 0
+        s.attackHitDone = false
+        s.bladeCd.trigger()
+        s.aimTimer = 0.7
+        audio.bladeIgnite()
+      }
+
+      if (input.consumePressed('Space') && s.dodgeCd.ready() && !attacking) {
         s.dodgeDir.copy(moving ? move : fwd)
         s.dodgeTime = PLAYER.dodgeDuration
+        s.dashT = 0
         s.dodgeCd.trigger()
+        p.guarding = false
         audio.dodge()
       }
 
@@ -134,45 +161,78 @@ export function Player() {
         p.velocity.copy(s.dodgeDir).multiplyScalar(PLAYER.dodgeSpeed)
       } else {
         p.invulnerable = false
-        const sprint = input.isDown('ShiftLeft') || input.isDown('ShiftRight')
-        target.copy(move).multiplyScalar(sprint && f > 0 && !input.fire ? PLAYER.sprintSpeed : PLAYER.walkSpeed)
+        const sprint = (input.isDown('ShiftLeft') || input.isDown('ShiftRight')) && f > 0 && !input.fire && !p.guarding && !attacking
+        let speed = sprint ? PLAYER.sprintSpeed : PLAYER.walkSpeed
+        if (p.guarding) speed *= PLAYER.guardSpeedMultiplier
+        if (attacking) speed *= 0.4
+        target.copy(move).multiplyScalar(speed)
+        // Short lunge into the swing.
+        if (attacking && s.attackT > 0.08 && s.attackT < 0.24) target.addScaledVector(fwd, PLAYER.bladeLunge)
         p.velocity.lerp(target, 1 - Math.exp(-PLAYER.acceleration * dt))
       }
       p.position.addScaledVector(p.velocity, dt)
       resolveCircle(p.position, PLAYER.radius)
       p.dodgeReady = s.dodgeCd.progress
       p.moving = moving
+    } else {
+      p.velocity.multiplyScalar(Math.exp(-10 * dt))
+      p.guarding = false
     }
+    if (game.phase === 'defeat') p.defeatT += dt
 
-    // --- Facing: toward aim while shooting, otherwise toward movement ---
+    // --- Facing: aim direction while shooting/attacking/guarding, dash direction while dashing, else movement ---
     s.aimTimer = Math.max(0, s.aimTimer - dt)
     if (playing && input.fire) s.aimTimer = 0.7
     const speed = Math.hypot(p.velocity.x, p.velocity.z)
-    if (s.aimTimer > 0) s.facing = turnTowards(s.facing, cam.yaw, 18 * dt)
+    if (s.dodgeTime > 0) s.facing = turnTowards(s.facing, Math.atan2(-s.dodgeDir.x, -s.dodgeDir.z), 25 * dt)
+    else if (s.aimTimer > 0 || p.guarding || s.attackT !== null) s.facing = turnTowards(s.facing, cam.yaw, 18 * dt)
     else if (speed > 0.5) s.facing = turnTowards(s.facing, Math.atan2(-p.velocity.x, -p.velocity.z), 10 * dt)
     else if (game.phase === 'title') s.facing = 0
 
-    // --- Model pose ---
-    root.current.position.copy(p.position)
-    model.current.rotation.y = s.facing
-    s.stride += speed * dt * 1.6
-    const swing = Math.sin(s.stride) * Math.min(1, speed / 5) * 0.6
-    legL.current.rotation.x = swing
-    legR.current.rotation.x = -swing
-    const dodging = s.dodgeTime > 0
-    model.current.position.y = dodging ? -0.35 : Math.abs(Math.sin(s.stride)) * 0.05 * Math.min(1, speed / 5)
-    model.current.rotation.x = dodging ? -0.5 : game.phase === 'defeat' ? -1.4 : -Math.min(speed / 40, 0.15)
-    if (game.phase === 'defeat') model.current.position.y = 0.2
+    // --- Blade timeline (gameplay clock that the animation follows) ---
+    if (s.attackT !== null) {
+      s.attackT += dt
+      if (!s.attackHitDone && s.attackT >= PLAYER.bladeHitTime && playing) {
+        s.attackHitDone = true
+        bladeHit(game)
+      }
+      if (s.attackT > PLAYER.bladeDuration) s.attackT = null
+    }
+    if (s.dashT !== null) {
+      s.dashT += dt
+      if (s.dashT > PLAYER.dodgeDuration + 0.15) s.dashT = null
+    }
 
-    // --- Fire ---
-    if (playing && input.fire && s.fireCd.ready() && !dodging) {
-      model.current.updateMatrixWorld(true)
+    // --- Character model ---
+    root.current.position.copy(p.position)
+    root.current.rotation.y = s.facing
+    driver.speed = speed
+    driver.moveAngle = speed > 0.3 ? wrapAngle(Math.atan2(-p.velocity.x, -p.velocity.z) - s.facing) : 0
+    driver.aiming = playing && s.aimTimer > 0 && s.attackT === null && !p.guarding
+    driver.aimPitch = cam.pitch
+    driver.attackT = p.attackT = s.attackT
+    p.dashT = s.dashT
+    driver.attackDuration = PLAYER.bladeDuration
+    driver.guarding = playing && p.guarding
+    driver.dashT = s.dashT
+    driver.dashDuration = PLAYER.dodgeDuration
+    driver.hitT = p.hitT
+    driver.defeatT = game.phase === 'defeat' ? p.defeatT : null
+    const api = model.current
+    if (api) {
+      api.update(dt, driver, !s.settled)
+      s.settled = true
+      root.current.updateMatrixWorld(true)
+      api.muzzle.getWorldPosition(p.muzzle)
+    }
+
+    // --- Fire (after the pose update so the muzzle is where the gun is this frame) ---
+    if (playing && input.fire && s.fireCd.ready() && !dodging && s.attackT === null && !p.guarding && api) {
       shoot(game)
       s.fireCd.trigger()
     }
     s.flashT = Math.max(0, s.flashT - dt)
-    flashMat.opacity = s.flashT > 0 ? 1 : 0
-    flash.current.rotation.z = Math.random() * Math.PI
+    api?.setFlash(s.flashT > 0)
 
     // --- Interaction, hazard, extraction ---
     if (playing) {
@@ -191,7 +251,7 @@ export function Player() {
         if (s.hazardAcc >= 0.25) {
           s.hazardAcc -= 0.25
           game.damagePlayer(HAZARD_DPS * 0.25)
-          spawnSpark(pivot.set(p.position.x, 0.4, p.position.z), '#9fd8ff', 0.8)
+          spawnSpark(tmp.set(p.position.x, 0.4, p.position.z), '#9fd8ff', 0.8)
         }
       } else s.hazardAcc = 0
 
@@ -217,55 +277,7 @@ export function Player() {
 
   return (
     <group ref={root}>
-      <group ref={model}>
-        <group ref={legL} position={[-0.15, 0.9, 0]}>
-          <mesh castShadow position={[0, -0.45, 0]} material={MAT.suit}>
-            <boxGeometry args={[0.2, 0.9, 0.24]} />
-          </mesh>
-        </group>
-        <group ref={legR} position={[0.15, 0.9, 0]}>
-          <mesh castShadow position={[0, -0.45, 0]} material={MAT.suit}>
-            <boxGeometry args={[0.2, 0.9, 0.24]} />
-          </mesh>
-        </group>
-        <mesh castShadow position={[0, 1.22, 0]} material={MAT.armor}>
-          <boxGeometry args={[0.58, 0.66, 0.34]} />
-        </mesh>
-        <mesh position={[0, 1.3, -0.176]} material={MAT.cyan}>
-          <boxGeometry args={[0.22, 0.04, 0.01]} />
-        </mesh>
-        <mesh castShadow position={[0, 1.24, 0.26]} material={MAT.hullDark}>
-          <boxGeometry args={[0.46, 0.52, 0.18]} />
-        </mesh>
-        <mesh position={[0.12, 1.4, 0.36]} material={MAT.amber}>
-          <boxGeometry args={[0.05, 0.12, 0.01]} />
-        </mesh>
-        <mesh castShadow position={[0, 1.74, 0]} material={MAT.armor}>
-          <sphereGeometry args={[0.2, 18, 14]} />
-        </mesh>
-        <mesh position={[0, 1.75, -0.14]} material={MAT.cyan}>
-          <boxGeometry args={[0.27, 0.07, 0.1]} />
-        </mesh>
-        <mesh castShadow position={[-0.38, 1.18, 0]} rotation={[0.2, 0, 0.1]} material={MAT.suit}>
-          <boxGeometry args={[0.16, 0.6, 0.18]} />
-        </mesh>
-        <mesh castShadow position={[0.34, 1.28, -0.2]} rotation={[-1.25, 0, 0]} material={MAT.suit}>
-          <boxGeometry args={[0.16, 0.55, 0.18]} />
-        </mesh>
-        <group position={[0.3, 1.3, -0.5]}>
-          <mesh castShadow material={MAT.gun}>
-            <boxGeometry args={[0.1, 0.15, 0.6]} />
-          </mesh>
-          <mesh position={[0, 0.05, -0.05]} material={MAT.cyan}>
-            <boxGeometry args={[0.02, 0.02, 0.3]} />
-          </mesh>
-          <group ref={muzzle} position={[0, 0, -0.33]}>
-            <mesh ref={flash} material={flashMat}>
-              <planeGeometry args={[0.35, 0.35]} />
-            </mesh>
-          </group>
-        </group>
-      </group>
+      <OperativeModel apiRef={model} />
     </group>
   )
 }

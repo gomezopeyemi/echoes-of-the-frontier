@@ -133,6 +133,31 @@ export const audio = {
     tone({ type: 'sine', f0: 880, f1: 1320, dur: 0.12, gain: 0.06 })
     tone({ type: 'sine', f0: 1320, f1: 1760, dur: 0.12, gain: 0.05, delay: 0.1 })
   },
+  bladeIgnite() {
+    tone({ type: 'sawtooth', f0: 90, f1: 260, dur: 0.18, gain: 0.05 })
+    noise({ dur: 0.22, gain: 0.08, freq: 1800, filter: 'bandpass' })
+  },
+  bladeHit() {
+    tone({ type: 'square', f0: 240, f1: 70, dur: 0.16, gain: 0.12 })
+    noise({ dur: 0.14, gain: 0.16, freq: 3200, filter: 'bandpass' })
+  },
+  block() {
+    tone({ type: 'triangle', f0: 1500, f1: 900, dur: 0.12, gain: 0.08 })
+    noise({ dur: 0.1, gain: 0.1, freq: 5000, filter: 'highpass' })
+  },
+  stagger() {
+    tone({ type: 'sawtooth', f0: 420, f1: 110, dur: 0.45, gain: 0.07 })
+  },
+  servo() {
+    tone({ type: 'sawtooth', f0: 70, f1: 140, dur: 1.4, gain: 0.05 })
+    tone({ type: 'square', f0: 210, f1: 380, dur: 0.9, gain: 0.02, delay: 0.5 })
+  },
+  /** Heavy droid footfall; `level` 0..1 from distance to the player. */
+  droidStep(level = 1) {
+    if (level <= 0.02) return
+    tone({ type: 'sine', f0: 70, f1: 38, dur: 0.22, gain: 0.22 * level })
+    noise({ dur: 0.08, gain: 0.06 * level, freq: 400 })
+  },
   victory() {
     ;[523, 659, 784, 1046].forEach((f, i) => tone({ type: 'triangle', f0: f, dur: 0.6, gain: 0.08, delay: i * 0.15 }))
   },

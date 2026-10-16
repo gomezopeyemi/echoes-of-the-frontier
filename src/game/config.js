@@ -16,14 +16,32 @@ export const PLAYER = {
   critMultiplier: 1.8,
   weaponRange: 60,
   interactRange: 2.6,
+  // Energy blade: one hit check per swing, inside the strike window of the animation.
+  bladeDamage: 26,
+  bladeRange: 2.4,
+  bladeArcCos: 0.45, // ~63° either side of facing
+  bladeDuration: 0.5,
+  bladeHitTime: 0.17,
+  bladeCooldown: 0.65,
+  bladeLunge: 4,
+  // Guard: hold to block. Reduces incoming droid damage; slows movement.
+  guardDamageMultiplier: 0.3,
+  guardSpeedMultiplier: 0.45,
 }
 
 export const DROID = {
   name: 'SEC-DROID K7',
-  radius: 1.0,
+  radius: 0.75, // body collision
   maxHealth: 240,
-  restHeight: 0.6,
-  hoverHeight: 1.4,
+  // Hit volume (spheres stacked along the body, relative to the droid's feet).
+  hitSpheres: [
+    { y: 0.55, r: 0.42 },
+    { y: 1.35, r: 0.5 },
+    { y: 1.8, r: 0.52 },
+    { y: 2.08, r: 0.2 },
+  ],
+  eyeHeight: 2.05,
+  muzzleHeight: 1.5,
   detectionRange: 9,
   bootTime: 2.2,
   chaseSpeed: 4.4,
@@ -42,6 +60,10 @@ export const DROID = {
   projectileDamage: 14,
   enrageThreshold: 0.4,
   enrageMultiplier: 1.3,
+  // Poise: accumulated damage that interrupts the droid with a stagger.
+  staggerPoise: 50,
+  poiseRegen: 12,
+  staggerTime: 0.8,
 }
 
 export const HAZARD_DPS = 16

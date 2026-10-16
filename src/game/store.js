@@ -27,6 +27,7 @@ const missionState = () => ({
   openLog: null,
   collectedLogs: [],
   hurtCount: 0,
+  lastHit: { amount: 0, blocked: false }, // most recent damage taken (HUD feedback)
   hitMarker: 0,
   lastHitCrit: false,
   warned: {},
@@ -49,7 +50,9 @@ export const useGame = create((set, get) => ({
   },
 
   pause() {
-    if (get().phase === 'playing') set({ phase: 'paused' })
+    if (get().phase !== 'playing') return
+    unlockPointer() // free the cursor so the pause menu is clickable (P pauses without the browser releasing it)
+    set({ phase: 'paused' })
   },
   resume() {
     if (get().phase === 'paused') {
@@ -145,6 +148,7 @@ export const useGame = create((set, get) => ({
     set({
       playerHealth: hp,
       hurtCount: s.hurtCount + 1,
+      lastHit: { amount: s.playerHealth - hp, blocked },
       stats: { ...s.stats, damageTaken: s.stats.damageTaken + (s.playerHealth - hp) },
     })
     if (hp > 0 && hp <= 30) get().warnOnce('lowHealth')

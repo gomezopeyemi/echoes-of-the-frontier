@@ -103,6 +103,23 @@ describe('guard and hit reaction (store rules)', () => {
     expect(runtime.player.hitT).toBe(0)
   })
 
+  it('records the last hit for HUD feedback (amount and whether it was blocked)', () => {
+    runtime.player.guarding = true
+    useGame.getState().damagePlayer(20, { blockable: true })
+    expect(useGame.getState().lastHit).toEqual({ amount: 20 * PLAYER.guardDamageMultiplier, blocked: true })
+    runtime.player.guarding = false
+    useGame.getState().damagePlayer(10, { blockable: true })
+    expect(useGame.getState().lastHit).toEqual({ amount: 10, blocked: false })
+  })
+
+  it('pause only applies while playing', () => {
+    useGame.getState().pause()
+    expect(useGame.getState().phase).toBe('paused')
+    useGame.setState({ phase: 'victory' })
+    useGame.getState().pause()
+    expect(useGame.getState().phase).toBe('victory')
+  })
+
   it('hazards are never blockable', () => {
     runtime.player.guarding = true
     useGame.getState().damagePlayer(10)

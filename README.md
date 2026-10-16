@@ -42,6 +42,47 @@ No extra asset installation is needed. All character geometry, materials and tex
 5. **Extract**: the beacon past the north wall lights up. Step onto the pad to win.
 6. Lose all vitals and the mission fails. Redeploy restarts cleanly.
 
+## HUD
+
+![HUD](docs/screenshots/hud.jpg)
+
+The in-game HUD (`src/ui/HUD.jsx`, `src/ui/hud.css`, `src/ui/hudIcons.jsx`) is an industrial instrumentation overlay:
+- **Palette:** near-black panels, an ice-blue primary colour matching the operative's visor, and muted grey text. Amber is used only for warnings and critical states; hostile red only for the enemy.
+- **Construction:** thin 1px rules, corner ticks, mono-spaced technical labels, and custom stroke icons. No icon library.
+- **Input:** the whole overlay is `pointer-events: none`, so it never intercepts game input.
+
+| Area | Shows | Source of truth |
+| --- | --- | --- |
+| Top left | Frontier Operations · Mission 01 · The Silent Outpost, current objective, distance to it, objective progress (1/3) | `useGame.stage`, `MISSION`, `objectiveTarget()` |
+| Top right | Active weapon (energy pistol, or energy blade while swinging/guarding), its readiness, threat status and range | `runtime.player.weapon`, `runtime.player.abilities`, `useGame.droidStatus` |
+| Top centre | Target panel, only while the encounter is live (plus 3 s after the kill): health with damage trail, live AI state (wind-up/charging in amber), balance (poise), overheated flag | `useGame.droidHealth/droidStatus`, `runtime.droid.state/poise/enraged` |
+| Bottom left | Vitals with damage trail and 10% graduations, damage chip (`−22`, `Blocked −6`), guard/evade flags, amber critical state at ≤30 HP | `useGame.playerHealth/hurtCount/lastHit`, `runtime.player.abilities` |
+| Bottom centre | Ability bar with real bindings, cooldown sweeps, active/blocked states | `runtime.player.abilities` (published by `Player.jsx` from the same gates the controls use) |
+| Bottom right | `E` prompts only when in range (terminal, data logs); an extraction cue only within 9 m of the beacon | `useGame.prompt`, `useGame.stage` + distance to `BEACON` |
+| Centre | Minimal crosshair; hit confirmation only on real damage (brighter on crits) | `useGame.hitMarker/lastHitCrit` |
+
+**Ability slots vs. the design board.** The slots keep the board's order. The bindings, though, are the game's existing controls; they weren't changed:
+
+| Slot | Mechanic in the game | Binding |
+| --- | --- | --- |
+| Energy Strike | Energy blade slash | RMB / F |
+| Combat Dash | Invulnerable dash | Space |
+| Energy Guard | Guard, −70% droid damage | Hold Q |
+| Kinetic Pulse | **Not implemented**: shown offline (dashed, locked) | none |
+| Plasma Shot | Energy pistol | LMB |
+
+**Per-frame values never re-render React.** Cooldowns, distances, droid state and poise are written straight to the DOM from a `requestAnimationFrame` loop. Discrete events (health, stage, prompts, hits) use zustand selectors. The 3D scene never remounts because of the HUD.
+
+**Responsive layout.**
+- **Wide:** the classic four-corner layout.
+- **Below 1180 px:** ability names hide; bindings and tooltips stay.
+- **Below 960 px:** the top becomes two side columns (mission + target on the left, combat + log on the right), keeping the centre clear.
+- **Below 760 px:** panels compact, and the ability bar lifts above the vitals.
+
+Animations are short and respect `prefers-reduced-motion`.
+
+![HUD states and narrow layouts](docs/screenshots/hud-states.jpg)
+
 ## Characters
 
 Both characters follow the design board in [`docs/reference/character-design-board.webp`](docs/reference/character-design-board.webp).

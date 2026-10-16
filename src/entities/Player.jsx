@@ -57,6 +57,15 @@ export function Player() {
     settled: false,
   }).current
 
+  // Ability gates: the single source of truth for when each action may start.
+  // Gameplay below uses them, and the same results are published for the HUD.
+  const gates = {
+    strike: () => s.attackT === null && s.dodgeTime <= 0 && !runtime.player.guarding,
+    dash: () => s.attackT === null,
+    guard: () => s.attackT === null && s.dodgeTime <= 0,
+    shot: () => s.attackT === null && s.dodgeTime <= 0 && !runtime.player.guarding,
+  }
+
   function shoot(game) {
     camera.getWorldDirection(camDir)
     ray.set(camera.position, camDir)
@@ -82,7 +91,7 @@ export function Player() {
         critMultiplier: PLAYER.critMultiplier,
       })
       game.damageDroid(dmg.amount, dmg.crit)
-      spawnSpark(hitPoint, dmg.crit ? '#fff1a8' : '#ffb347', dmg.crit ? 1.7 : 1)
+      spawnSpark(hitPoint, dmg.crit ? '#fff1a8' : '#ffb347', dmg.crit ? 0.7 : 0.45)
       audio.hit(dmg.crit)
     } else if (t < PLAYER.weaponRange) {
       spawnSpark(hitPoint, '#8fd3ff', 0.5)
@@ -123,7 +132,6 @@ export function Player() {
 
     // --- Actions & movement ---
     const attacking = s.attackT !== null
-    const dodging = s.dodgeTime > 0
     p.hitT += dt
     if (playing) {
       s.fireCd.tick(dt)
@@ -135,10 +143,10 @@ export function Player() {
       const moving = move.lengthSq() > 0
       if (moving) move.normalize()
 
-      p.guarding = input.isDown('KeyQ') && !dodging && !attacking
+      p.guarding = input.isDown('KeyQ') && gates.guard()
 
       const bladePressed = input.consumePressed('Mouse2') || input.consumePressed('KeyF')
-      if (bladePressed && !attacking && !dodging && !p.guarding && s.bladeCd.ready()) {
+      if (bladePressed && gates.strike() && s.bladeCd.ready()) {
         s.attackT = 0
         s.attackHitDone = false
         s.bladeCd.trigger()
@@ -146,7 +154,7 @@ export function Player() {
         audio.bladeIgnite()
       }
 
-      if (input.consumePressed('Space') && s.dodgeCd.ready() && !attacking) {
+      if (input.consumePressed('Space') && s.dodgeCd.ready() && gates.dash()) {
         s.dodgeDir.copy(moving ? move : fwd)
         s.dodgeTime = PLAYER.dodgeDuration
         s.dashT = 0
@@ -227,12 +235,27 @@ export function Player() {
     }
 
     // --- Fire (after the pose update so the muzzle is where the gun is this frame) ---
-    if (playing && input.fire && s.fireCd.ready() && !dodging && s.attackT === null && !p.guarding && api) {
+    if (playing && input.fire && s.fireCd.ready() && gates.shot() && api) {
       shoot(game)
       s.fireCd.trigger()
     }
     s.flashT = Math.max(0, s.flashT - dt)
     api?.setFlash(s.flashT > 0)
+
+    // --- Publish ability state for the HUD (read-only view of the gates and cooldowns above) ---
+    const ab = p.abilities
+    ab.strike.progress = s.bladeCd.progress
+    ab.strike.available = playing && gates.strike()
+    ab.strike.active = s.attackT !== null
+    ab.dash.progress = s.dodgeCd.progress
+    ab.dash.available = playing && gates.dash()
+    ab.dash.active = s.dodgeTime > 0
+    ab.guard.available = playing && gates.guard()
+    ab.guard.active = playing && p.guarding
+    ab.shot.progress = s.fireCd.progress
+    ab.shot.available = playing && gates.shot()
+    ab.shot.active = playing && input.fire && gates.shot()
+    p.weapon = s.attackT !== null || p.guarding ? 'blade' : 'pistol'
 
     // --- Interaction, hazard, extraction ---
     if (playing) {

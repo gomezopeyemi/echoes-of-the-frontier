@@ -19,6 +19,15 @@ const makeRuntime = () => ({
     attackT: null, // energy blade swing clock (null when not attacking)
     dashT: null,
     muzzle: new Vector3(SPAWN.x, 1.3, SPAWN.z), // pistol muzzle, world space (updated from the model)
+    // Published by Player each frame for the HUD: cooldown progress (0 = just used, 1 = ready),
+    // whether the action may start right now, and whether it is in progress.
+    abilities: {
+      strike: { progress: 1, available: false, active: false }, // energy blade
+      dash: { progress: 1, available: false, active: false },
+      guard: { progress: 1, available: false, active: false },
+      shot: { progress: 1, available: false, active: false }, // energy pistol
+    },
+    weapon: 'pistol', // 'pistol' | 'blade' (blade while swinging or guarding)
   },
   droid: {
     position: new Vector3(DROID_HOME.x, 0, DROID_HOME.z),

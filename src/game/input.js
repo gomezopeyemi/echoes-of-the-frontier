@@ -89,5 +89,5 @@ export function lockPointer() {
 }
 
 export function unlockPointer() {
-  if (document.pointerLockElement) document.exitPointerLock?.()
+  if (typeof document !== 'undefined' && document.pointerLockElement) document.exitPointerLock?.()
 }

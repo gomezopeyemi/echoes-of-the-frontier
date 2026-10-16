@@ -42,7 +42,7 @@ function Shoulder({ side, mat, warn }) {
   const s = side === 'L' ? -1 : 1
   return (
     <>
-      <M g={sphere(0.1, 14, 10)} m={mat.droidGunmetal} />
+      <M g={sphere(0.1, 14, 10)} m={mat.droidRubber} />
       <M g={rbox(0.29, 0.19, 0.36, 0.06)} m={mat.droidComposite} p={[s * 0.07, 0.09, 0]} r={[0, 0, -s * 0.3]} cs />
       <M g={rbox(0.23, 0.05, 0.3, 0.02)} m={mat.droidPlate} p={[s * 0.06, 0.19, 0]} r={[0, 0, -s * 0.3]} cs />
       <M g={rbox(0.2, 0.1, 0.05, 0.02)} m={mat.droidGunmetal} p={[s * 0.08, 0.05, -0.18]} r={[0, 0, -s * 0.3]} />
@@ -58,17 +58,17 @@ function Leg({ side, J, mat }) {
   const s = side === 'L' ? -1 : 1
   return (
     <group ref={J(`hip${side}`)} position={BIND[`hip${side}`]}>
-      <M g={sphere(0.09, 12, 10)} m={mat.droidGunmetal} />
+      <M g={sphere(0.09, 12, 10)} m={mat.droidRubber} />
       <M g={capsule(0.08, 0.3)} m={mat.droidGunmetal} p={[0, -0.25, 0]} />
       <M g={rbox(0.2, 0.32, 0.22, 0.05)} m={mat.droidComposite} p={[0, -0.23, -0.025]} cs />
       <M g={rbox(0.05, 0.22, 0.16, 0.02)} m={mat.droidPlate} p={[s * 0.11, -0.22, 0]} cs />
-      <M g={cyl(0.02, 0.02, 0.32, 8)} m={mat.droidHydraulic} p={[-s * 0.07, -0.25, 0.1]} />
+      <M g={cyl(0.02, 0.02, 0.32, 8)} m={mat.droidPiston} p={[-s * 0.07, -0.25, 0.1]} />
       <group ref={J(`knee${side}`)} position={BIND[`knee${side}`]}>
         <M g={cyl(0.075, 0.075, 0.18, 16)} m={mat.droidHydraulic} r={[0, 0, Math.PI / 2]} />
         <M g={rbox(0.14, 0.13, 0.08, 0.03)} m={mat.droidPlate} p={[0, 0.0, -0.1]} cs />
         <M g={rbox(0.13, 0.42, 0.14, 0.03)} m={mat.droidGunmetal} p={[0, -0.24, 0.02]} cs />
         <M g={rbox(0.16, 0.34, 0.07, 0.03)} m={mat.droidComposite} p={[0, -0.21, -0.075]} cs />
-        <M g={cyl(0.026, 0.026, 0.34, 8)} m={mat.droidHydraulic} p={[0, -0.22, 0.1]} />
+        <M g={cyl(0.026, 0.026, 0.34, 8)} m={mat.droidPiston} p={[0, -0.22, 0.1]} />
         <M g={cyl(0.04, 0.04, 0.12, 10)} m={mat.droidGunmetal} p={[0, -0.08, 0.1]} />
         <group ref={J(`ankle${side}`)} position={BIND[`ankle${side}`]}>
           <M g={cyl(0.06, 0.06, 0.16, 12)} m={mat.droidGunmetal} r={[0, 0, Math.PI / 2]} />
@@ -92,7 +92,6 @@ export function DroidModel({ apiRef }) {
   const chargeGlow = useRef()
   const melee = useRef()
   const arc = useRef()
-  const eyeLight = useRef()
   const animator = useMemo(() => new DroidAnimator(), [])
   // Per-instance emissives so intensities can follow combat state.
   const fx = useMemo(
@@ -131,7 +130,6 @@ export function DroidModel({ apiRef }) {
         else if (s === 'destroyed') eye = d.stateT < 1 && Math.sin(time * 33) > 0.3 ? 1.5 * (1 - d.stateT) : 0
         fx.optic.emissiveIntensity = eye
         fx.sensor.emissiveIntensity = s === 'destroyed' ? 0 : s === 'dormant' ? 0.1 : 1.2
-        eyeLight.current.intensity = Math.min(eye, 5) * 0.35
 
         // Orange warning lights blink while an attack is being telegraphed.
         const telegraph = s === 'windup' || s === 'charging'
@@ -164,7 +162,7 @@ export function DroidModel({ apiRef }) {
   return (
     <group>
       <group ref={J('pelvis')} position={BIND.pelvis}>
-        <M g={rbox(0.36, 0.18, 0.27, 0.04)} m={mat.droidGunmetal} cs />
+        <M g={rbox(0.36, 0.18, 0.27, 0.04)} m={mat.droidHull} cs />
         <M g={cyl(0.075, 0.075, 0.44, 14)} m={mat.droidHydraulic} p={[0, -0.04, 0]} r={[0, 0, Math.PI / 2]} />
         <M g={rbox(0.26, 0.16, 0.045, 0.02)} m={mat.droidComposite} p={[0, -0.08, -0.15]} r={[0.15, 0, 0]} cs />
         <M g={rbox(0.045, 0.18, 0.2, 0.02)} m={mat.droidPlate} p={[-0.235, -0.07, 0]} r={[0, 0, 0.12]} cs />
@@ -176,13 +174,13 @@ export function DroidModel({ apiRef }) {
           <M g={cyl(0.075, 0.075, 0.2, 14)} m={mat.droidHydraulic} p={[0, 0.07, 0.05]} />
           <M g={rbox(0.29, 0.07, 0.2, 0.025)} m={mat.droidComposite} p={[0, 0.03, -0.02]} cs />
           <M g={rbox(0.31, 0.07, 0.21, 0.025)} m={mat.droidComposite} p={[0, 0.115, -0.02]} cs />
-          <M g={cyl(0.018, 0.018, 0.22, 8)} m={mat.droidHydraulic} p={[-0.13, 0.08, 0.04]} />
-          <M g={cyl(0.018, 0.018, 0.22, 8)} m={mat.droidHydraulic} p={[0.13, 0.08, 0.04]} />
+          <M g={cyl(0.018, 0.018, 0.22, 8)} m={mat.droidPiston} p={[-0.13, 0.08, 0.04]} />
+          <M g={cyl(0.018, 0.018, 0.22, 8)} m={mat.droidPiston} p={[0.13, 0.08, 0.04]} />
 
           <group ref={J('chest')} position={BIND.chest}>
             {/* Reinforced torso: broad upper chest tapering into the ribcage */}
-            <M g={rbox(0.6, 0.27, 0.4, 0.07)} m={mat.droidGunmetal} p={[0, 0.25, 0]} cs />
-            <M g={rbox(0.46, 0.2, 0.33, 0.06)} m={mat.droidGunmetal} p={[0, 0.06, 0.01]} cs />
+            <M g={rbox(0.6, 0.27, 0.4, 0.07)} m={mat.droidHull} p={[0, 0.25, 0]} cs />
+            <M g={rbox(0.46, 0.2, 0.33, 0.06)} m={mat.droidHull} p={[0, 0.06, 0.01]} cs />
             <M g={rbox(0.26, 0.22, 0.05, 0.03)} m={mat.droidComposite} p={[-0.14, 0.25, -0.2]} r={[-0.12, 0.2, 0.06]} cs />
             <M g={rbox(0.26, 0.22, 0.05, 0.03)} m={mat.droidComposite} p={[0.14, 0.25, -0.2]} r={[-0.12, -0.2, -0.06]} cs />
             <M g={rbox(0.36, 0.06, 0.04, 0.015)} m={mat.droidComposite} p={[0, 0.09, -0.17]} />
@@ -197,20 +195,19 @@ export function DroidModel({ apiRef }) {
             ))}
             <group ref={J('neck')} position={BIND.neck}>
               <M g={cyl(0.05, 0.065, 0.12, 12)} m={mat.droidGunmetal} p={[0, 0.02, 0]} />
-              <M g={cyl(0.016, 0.016, 0.14, 8)} m={mat.droidHydraulic} p={[-0.06, 0.02, 0.03]} r={[0, 0, 0.2]} />
-              <M g={cyl(0.016, 0.016, 0.14, 8)} m={mat.droidHydraulic} p={[0.06, 0.02, 0.03]} r={[0, 0, -0.2]} />
+              <M g={cyl(0.016, 0.016, 0.14, 8)} m={mat.droidPiston} p={[-0.06, 0.02, 0.03]} r={[0, 0, 0.2]} />
+              <M g={cyl(0.016, 0.016, 0.14, 8)} m={mat.droidPiston} p={[0.06, 0.02, 0.03]} r={[0, 0, -0.2]} />
               <group ref={J('head')} position={BIND.head}>
                 {/* Armoured sensor head: rounded dome, central red optic in a deep housing */}
-                <M g={sphere(0.13, 22, 16)} m={mat.droidGunmetal} p={[0, 0.08, 0]} s={[1, 0.86, 1.06]} cs />
+                <M g={sphere(0.13, 22, 16)} m={mat.droidHull} p={[0, 0.08, 0]} s={[1, 0.86, 1.06]} cs />
                 <M g={rbox(0.24, 0.04, 0.2, 0.02)} m={mat.droidPlate} p={[0, 0.158, -0.015]} r={[0.2, 0, 0]} cs />
                 <M g={rbox(0.05, 0.12, 0.16, 0.02)} m={mat.droidComposite} p={[-0.12, 0.07, -0.03]} r={[0, 0.25, 0]} cs />
                 <M g={rbox(0.05, 0.12, 0.16, 0.02)} m={mat.droidComposite} p={[0.12, 0.07, -0.03]} r={[0, -0.25, 0]} cs />
                 <M g={rbox(0.15, 0.05, 0.06, 0.02)} m={mat.droidComposite} p={[0, 0.0, -0.11]} r={[0.35, 0, 0]} />
                 <M g={cyl(0.07, 0.078, 0.06, 24)} m={mat.droidComposite} p={[0, 0.08, -0.13]} r={[Math.PI / 2, 0, 0]} />
                 <M g={cyl(0.052, 0.052, 0.02, 24)} m={fx.optic} p={[0, 0.08, -0.152]} r={[Math.PI / 2, 0, 0]} />
-                <M g={sphere(0.056, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)} m={mat.visorGlass} p={[0, 0.08, -0.156]} r={[-Math.PI / 2, 0, 0]} s={[1, 0.35, 1]} />
+                <M g={sphere(0.056, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2)} m={mat.droidLens} p={[0, 0.08, -0.156]} r={[-Math.PI / 2, 0, 0]} s={[1, 0.35, 1]} />
                 <M g={rbox(0.018, 0.018, 0.018, 0.005)} m={fx.warn} p={[-0.142, 0.11, -0.07]} />
-                <pointLight ref={eyeLight} position={[0, 0.08, -0.9]} color="#ff2a1a" distance={6} decay={2} />
               </group>
             </group>
 
@@ -243,15 +240,15 @@ export function DroidModel({ apiRef }) {
               <Shoulder side="R" mat={mat} warn={fx.warn} />
               <group ref={J('elbowR')} position={BIND.elbowR}>
                 <M g={cyl(0.068, 0.068, 0.15, 14)} m={mat.droidHydraulic} r={[0, 0, Math.PI / 2]} />
-                <M g={cyl(0.11, 0.12, 0.42, 18)} m={mat.droidGunmetal} p={[0, -0.2, 0]} cs />
+                <M g={cyl(0.11, 0.12, 0.42, 18)} m={mat.droidHull} p={[0, -0.2, 0]} cs />
                 <M g={rbox(0.17, 0.34, 0.11, 0.03)} m={mat.droidComposite} p={[0, -0.18, -0.06]} cs />
                 <M g={rbox(0.06, 0.26, 0.03, 0.01)} m={mat.droidPlate} p={[0, -0.2, -0.122]} />
                 <M g={rbox(0.022, 0.016, 0.022, 0.005)} m={fx.warn} p={[0.09, -0.07, -0.08]} />
-                <M g={cyl(0.052, 0.058, 0.24, 14)} m={mat.droidGunmetal} p={[0, -0.5, 0]} />
+                <M g={cyl(0.052, 0.058, 0.24, 14)} m={mat.droidHeatMetal} p={[0, -0.5, 0]} />
                 {[-0.42, -0.48, -0.54].map((y) => (
                   <M key={y} g={torus(0.07, 0.012, 6, 20)} m={fx.coil} p={[0, y, 0]} r={[Math.PI / 2, 0, 0]} />
                 ))}
-                <M g={cyl(0.066, 0.066, 0.045, 16)} m={mat.droidPlate} p={[0, -0.62, 0]} />
+                <M g={cyl(0.066, 0.066, 0.045, 16)} m={mat.droidHeatMetal} p={[0, -0.62, 0]} />
                 <M g={cyl(0.034, 0.034, 0.05, 12)} m={mat.droidRubber} p={[0, -0.64, 0]} />
                 <group ref={muzzle} position={[0, -0.67, 0]}>
                   <mesh ref={chargeGlow} material={fx.charge}>

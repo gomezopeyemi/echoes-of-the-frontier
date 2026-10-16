@@ -1,4 +1,5 @@
 import { BufferGeometry, CapsuleGeometry, CylinderGeometry, Float32BufferAttribute, SphereGeometry, TorusGeometry } from 'three'
+import { edgeFactor } from './surfaceDetail'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
 
 // Cached primitive geometry. Characters reuse the same shapes many times
@@ -11,8 +12,19 @@ const memo = (key, make) => {
   return g
 }
 
-/** Rounded box: bevelled edges catch light the way machined/moulded parts do. */
-export const rbox = (w, h, d, r = 0.015) => memo(`rb${w},${h},${d},${r}`, () => new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2, h / 2, d / 2)))
+/**
+ * Rounded box: bevelled edges catch light the way machined/moulded parts do.
+ * Carries a `surfEdge` attribute (1 on the bevels) so materials can wear edges only.
+ */
+export const rbox = (w, h, d, r = 0.015) =>
+  memo(`rb${w},${h},${d},${r}`, () => {
+    const g = new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2, h / 2, d / 2))
+    const n = g.attributes.normal
+    const edge = new Float32Array(n.count)
+    for (let i = 0; i < n.count; i++) edge[i] = edgeFactor(n.getX(i), n.getY(i), n.getZ(i))
+    g.setAttribute('surfEdge', new Float32BufferAttribute(edge, 1))
+    return g
+  })
 
 export const capsule = (r, len, radial = 10) => memo(`cap${r},${len},${radial}`, () => new CapsuleGeometry(r, len, 4, radial))
 

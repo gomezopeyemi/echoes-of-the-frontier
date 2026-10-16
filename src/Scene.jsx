@@ -15,7 +15,7 @@ export function Scene() {
     <>
       <Environment />
       {/* Reflections for character metals/visor only; the level keeps its night lighting. */}
-      <CharacterEnvironment intensity={0.55} />
+      <CharacterEnvironment preset="night" intensity={1.1} />
       <CharacterFillLight />
       <Structures />
       <Interactables />

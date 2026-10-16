@@ -69,7 +69,7 @@ function Arm({ side, J, mat, children }) {
         </>
       )}
       <group ref={J(`elbow${side}`)} position={BIND[`elbow${side}`]}>
-        <M g={sphere(0.047, 12, 10)} m={mat.gunmetal} />
+        <M g={sphere(0.047, 12, 10)} m={mat.rubber} />
         <M g={capsule(0.048, 0.16)} m={mat.undersuit} p={[0, -0.13, 0]} cs />
         <M g={rbox(left ? 0.085 : 0.09, 0.15, 0.095, 0.025)} m={mat.armorLight} p={[s * 0.004, -0.14, -0.006]} cs />
         <M g={rbox(0.088, 0.02, 0.098, 0.006)} m={mat.armorGraphite} p={[0, -0.215, -0.006]} />
@@ -77,7 +77,7 @@ function Arm({ side, J, mat, children }) {
           {/* Reinforced glove */}
           <M g={rbox(0.072, 0.085, 0.036, 0.013)} m={mat.armorGraphite} p={[0, -0.048, 0]} cs />
           <M g={rbox(0.07, 0.026, 0.02, 0.008)} m={mat.gunmetal} p={[0, -0.075, -0.022]} />
-          <M g={rbox(0.068, 0.05, 0.032, 0.012)} m={mat.undersuit} p={[0, -0.105, -0.01]} r={[0.5, 0, 0]} />
+          <M g={rbox(0.068, 0.05, 0.032, 0.012)} m={mat.leather} p={[0, -0.105, -0.01]} r={[0.5, 0, 0]} />
           <M g={rbox(0.022, 0.052, 0.024, 0.009)} m={mat.armorGraphite} p={[-s * 0.042, -0.055, -0.02]} r={[0.3, 0, -s * 0.35]} />
           {children}
         </group>
@@ -108,7 +108,7 @@ function Leg({ side, J, mat }) {
         <M g={rbox(0.122, 0.022, 0.14, 0.008)} m={mat.webbing} p={[0, -0.24, 0.002]} />
         <group ref={J(`ankle${side}`)} position={BIND[`ankle${side}`]}>
           <M g={rbox(0.112, 0.08, 0.25, 0.03)} m={mat.armorGraphite} p={[0, -0.005, -0.05]} cs />
-          <M g={rbox(0.118, 0.026, 0.262, 0.01)} m={mat.droidRubber} p={[0, -0.042, -0.05]} />
+          <M g={rbox(0.118, 0.026, 0.262, 0.01)} m={mat.rubber} p={[0, -0.042, -0.05]} />
           <M g={rbox(0.1, 0.045, 0.06, 0.018)} m={mat.gunmetal} p={[0, 0.0, -0.155]} />
           <M g={rbox(0.03, 0.05, 0.06, 0.01)} m={mat.armorLight} p={[s * 0.055, 0.01, 0.05]} />
         </group>
@@ -124,8 +124,8 @@ function EnergyPistol({ mat, muzzleRef, flashRef, flashMat }) {
       <M g={rbox(0.03, 0.042, 0.1, 0.01)} m={mat.armorGraphite} p={[0, 0.0, 0.025]} r={[-0.22, 0, 0]} />
       <M g={rbox(0.036, 0.2, 0.046, 0.01)} m={mat.armorLight} p={[0, -0.055, -0.045]} />
       <M g={rbox(0.032, 0.13, 0.024, 0.008)} m={mat.armorGraphite} p={[0, -0.06, -0.012]} />
-      <M g={rbox(0.006, 0.085, 0.012, 0.003)} m={mat.blueLight} p={[0.019, -0.06, -0.045]} />
-      <M g={rbox(0.006, 0.085, 0.012, 0.003)} m={mat.blueLight} p={[-0.019, -0.06, -0.045]} />
+      <M g={rbox(0.006, 0.085, 0.012, 0.003)} m={mat.energyCell} p={[0.019, -0.06, -0.045]} />
+      <M g={rbox(0.006, 0.085, 0.012, 0.003)} m={mat.energyCell} p={[-0.019, -0.06, -0.045]} />
       <M g={cyl(0.011, 0.013, 0.035, 10)} m={mat.gunmetal} p={[0, -0.17, -0.045]} />
       <group ref={muzzleRef} position={[0, -0.195, -0.045]}>
         <M mref={flashRef} g={sphere(0.05, 8, 6)} m={flashMat} s={[1, 1.8, 1]} />
@@ -274,7 +274,7 @@ export function OperativeModel({ apiRef, shadows = true }) {
             <group position={[0, 0.06, 0.2]} userData={{ bake: true }}>
               <M g={rbox(0.27, 0.33, 0.12, 0.035)} m={mat.armorGraphite} cs={cs} />
               <M g={rbox(0.2, 0.25, 0.012, 0.006)} m={mat.gunmetal} p={[0, -0.005, 0.061]} />
-              <M g={rbox(0.022, 0.16, 0.008, 0.004)} m={mat.blueLight} p={[0, -0.01, 0.069]} />
+              <M g={rbox(0.022, 0.16, 0.008, 0.004)} m={mat.packStatus} p={[0, -0.01, 0.069]} />
               <M g={cyl(0.05, 0.05, 0.25, 14)} m={mat.scarf} p={[0, 0.19, -0.005]} r={[0, 0, Math.PI / 2]} cs={cs} />
               <M g={rbox(0.05, 0.17, 0.09, 0.018)} m={mat.leather} p={[0.16, -0.04, -0.005]} />
               <M g={rbox(0.05, 0.17, 0.09, 0.018)} m={mat.leather} p={[-0.16, -0.04, -0.005]} />
@@ -282,7 +282,7 @@ export function OperativeModel({ apiRef, shadows = true }) {
             </group>
 
             <group ref={J('neck')} position={BIND.neck}>
-              <M g={capsule(0.05, 0.06)} m={mat.undersuit} p={[0, 0.02, 0]} />
+              <M g={capsule(0.05, 0.06)} m={mat.rubber} p={[0, 0.02, 0]} />
               <group ref={J('head')} position={BIND.head}>
                 {/* Enclosed helmet built from conforming shell panels (all share the shell's centre and scale):
                     crown, brow band, wrap-around visor, silver cheek guards, faceplate */}

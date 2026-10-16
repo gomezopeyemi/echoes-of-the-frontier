@@ -73,13 +73,37 @@ The joint names (`pelvis, spine, chest, neck, head, shoulderL/R, elbowL/R, wrist
 
 ### Materials
 
-Defined in `src/characters/materials.js`:
+![Before / after material refinement](docs/screenshots/materials-before-after.jpg)
 
-- Physically based materials with distinct roughness and metalness: matte fabric (weave texture), leather, painted composite armour, worn gunmetal, glossy visor glass (clearcoat), hydraulics, rubber.
-- Subtle procedural wear: soft grime as a colour multiplier, plus roughness breakup and wipe marks. Kept low-contrast on purpose.
-- Reflections come from a small pre-filtered studio environment that is applied **only to character materials**, so the night-time level lighting is unchanged.
-- A short-range, camera-side fill light (`CharacterFillLight`) keeps armour readable in the dark without lighting the level.
-- Emissive use is limited to visor optics, sensors, energy weapons and status lights.
+Every material belongs to one physical class (`src/characters/materials.js`), with the classes kept apart in roughness, metalness and specular response:
+
+| Class | Operative | Droid | Settings (starting points, tuned in the viewer) |
+| --- | --- | --- | --- |
+| Textile | undersuit, webbing, scarf, mantle | none | metalness 0, roughness 0.84–0.97, sheen, woven bump |
+| Coated armour | light composite plates, charcoal armour, helmet shell, orange accents | powder-coated shells, painted hull, grey plates | **metalness 0** (paint/ceramic is dielectric), roughness 0.34–0.64, thin clearcoat on some; edge chips reveal substrate (operative) or bare steel (droid) |
+| Bare metal | buckles, ear modules, toe caps, hilt, pistol barrel | limb cores and frame, actuator housings, polished piston rods, heat-tinted cannon barrel | **metalness 1**, light base colour, roughness 0.14–0.45 by finish, polished worn edges |
+| Rubber / seals | soles, neck seal, elbow joints | joint boots, soles | metalness 0, near-black, roughness 0.85 |
+| Glass | visor | red-tinted optic cover (its own material) | metalness 0, mirror clearcoat, extra reflection weight |
+| Emissive | visor optics > pistol cell > pack status > hilt indicator; blade | optic > sensors, coils (state-driven), orange warning lights | used only on light sources |
+
+**Surface detail (`src/characters/surfaceDetail.js`).** The primitives' UVs don't match real-world size, so ordinary textures stretch and change scale between parts. Each material instead samples one small tileable **data** texture in object space (triplanar), at a set number of tiles per metre:
+
+- **Hard surfaces** (512²): orange-peel micro bump, roughness breakup, colour drift and a chip mask.
+- **Textiles** (256²): a plain-weave bump with slubs and dye variation.
+
+Two further details:
+
+- **Edge wear only on edges.** Rounded boxes carry a `surfEdge` vertex attribute (1 on the bevels), so chips land on real exposed edges and never in the middle of a panel.
+- **The mantle is the exception.** It uses an ordinary UV bump map, because it deforms and object-space detail would swim.
+
+All detail textures are linear (non-colour) data; only the mantle's base-colour map is sRGB. Cost is three texture fetches per fragment, and all patched materials share one shader program.
+
+**Reflections (`CharacterEnvironment.jsx`).** A procedural PMREM environment replaces three's RoomEnvironment, whose small bright cubes showed up as random white rectangles on glossy armour.
+
+- **Studio preset:** a key softbox, fill and rim strips, and an overhead bounce, matching the viewer's direct lights.
+- **Night preset:** moonlit sky, a sodium lamp and a cool pad light, used in the level and applied only to character materials.
+
+The droid no longer carries its own red point light. That light was tinting its whole body red. The optic now reads through emission and bloom.
 
 ### Animation
 
@@ -108,20 +132,26 @@ Animation is procedural and pose-based (`src/characters/pose.js`). Gameplay fill
 - **Droid hit volume** is a stack of spheres matching the biped (legs, torso, shoulders, head) rather than one sphere.
 - **Restart** remounts the scene and resets `runtime`, so both rigs, all clocks, poise and positions start fresh.
 
-### Showcase
+### Showcase (model viewer)
 
-Open `/?showcase` (also linked from the title screen) for neutral studio lighting, an orbit camera, and buttons that run each character through its full animation set without gameplay.
+Open `/?showcase` (also linked from the title screen) to inspect both characters away from gameplay:
+
+- **Lighting presets:** *studio* (large soft key, fill, two rims, matching reflection environment) and *night* (moonlight key, sodium lamp, dim fill, as in the level).
+- **Camera presets:** front, ¾, side, rear and close-up, plus a free orbit camera that can't dip under the floor.
+- **Toggles:** ambient occlusion (N8AO, half resolution) and bloom (subtle, threshold above 1, so only emissives bloom).
+- **Tone mapping:** PBR Neutral output, so base colours read accurately; the game itself keeps ACES for its cinematic look.
+- **Animation:** buttons run every clip for both characters.
 
 ### Performance
 
 - Geometry is cached per unique shape and materials are shared.
 - After mount, each joint's static pieces are baked into one mesh per material (`bakeJoints.js`). That takes the operative from 132 to 77 visible meshes and the droid from 136 to 65.
 - Only larger parts cast shadows. Cloth deformation touches 165 vertices.
-- A frame in the level is roughly 360 draw calls, including the shadow pass and post-processing.
+- A frame in the level is roughly 375 draw calls, including the shadow pass and post-processing.
 
 ### Remaining limitations
 
-- **Prototype art.** Primitive-based forms cannot match the sculpted detail, silhouette nuance or hand-painted wear of the board. Real edge damage, decals and baked normal/AO maps need authored assets.
+- **Prototype art.** Primitive-based forms cannot match the sculpted detail, silhouette nuance or hand-painted wear of the board. The procedural surface detail is a stand-in for authored PBR texture sets: there are no baked normal or AO maps, no decals or markings, and wear is limited to rounded-box edges (sphere, cylinder and capsule parts never chip). Crevice darkening comes only from screen-space AO in the viewer.
 - **No skinning.** Limbs are rigid segments with joint caps; elbows and knees don't deform. The mantle is the only deforming mesh, and it is not a physics simulation (no collision against the body beyond leg clearance).
 - **Procedural animation.** Poses are hand-authored keyframes and procedural cycles, not motion capture. Feet are not IK-planted, so slight sliding is possible on turns, and the kneeling poses can dip a few centimetres into the ground.
 - **Not mirrored:** the energy blade is left-hand only; the plasma rifle from the board is not modelled because the game has no rifle mechanic yet.

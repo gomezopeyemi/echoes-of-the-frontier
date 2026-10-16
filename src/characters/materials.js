@@ -1,114 +1,28 @@
-import {
-  CanvasTexture,
-  Color,
-  DoubleSide,
-  MeshPhysicalMaterial,
-  MeshStandardMaterial,
-  RepeatWrapping,
-  SRGBColorSpace,
-} from 'three'
+import { CanvasTexture, Color, DoubleSide, MeshPhysicalMaterial, MeshStandardMaterial, SRGBColorSpace } from 'three'
+import { detailTextures, withSurface } from './surfaceDetail'
 
-// PBR materials for the characters, derived from the design board palette:
-//   operative: charcoal #1d1d1f, muted silver #cfcfcb, gunmetal #4a4c50,
-//              weathered tan #7a6248, accents electric blue + burnt orange
-//   droid:     dark gunmetal, black composite, worn steel, red optics,
-//              small orange warning lights
+// PBR material system for the two characters.
 //
-// Surface variation comes from small procedural canvas textures (soft grime,
-// roughness breakup, fabric weave). They are intentionally subtle: the goal is
-// "used equipment", not noisy grunge.
-
-// ---------- procedural textures ----------
-
-function canvas(size) {
-  const c = document.createElement('canvas')
-  c.width = c.height = size
-  return [c, c.getContext('2d')]
-}
+// Each material belongs to one physical class, and the classes are kept
+// clearly apart in roughness, metalness and specular response:
+//
+//   textile       metalness 0, rough 0.8-0.95, sheen for fibre back-scatter, weave bump
+//   coated armour metalness 0 (paint/ceramic is a dielectric), rough 0.38-0.58,
+//                 optional thin clearcoat, edge chips revealing the substrate
+//   bare metal    metalness 1, bright-ish base colour (real metals reflect
+//                 50-95%), roughness varies with finish, polished worn edges
+//   rubber        metalness 0, very dark, rough 0.8-0.9
+//   glass         metalness 0, near-black, mirror clearcoat
+//   emissive      only optics, sensors, energy weapons and status lights,
+//                 with a deliberate brightness hierarchy
+//
+// Base colours are sRGB hex values (three converts to linear). The detail
+// texture is linear data, see surfaceDetail.js. Numbers were tuned in the
+// ?showcase viewer under both the studio and night presets.
 
 function seeded(seed) {
   let s = seed >>> 0
   return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296)
-}
-
-function finish(c, { srgb = false, repeat = 1 } = {}) {
-  const t = new CanvasTexture(c)
-  t.wrapS = t.wrapT = RepeatWrapping
-  t.repeat.set(repeat, repeat)
-  if (srgb) t.colorSpace = SRGBColorSpace
-  t.anisotropy = 4
-  return t
-}
-
-/** Soft, low-frequency grime: mostly white with faint darker blotches. Used as a colour multiplier. */
-function grimeTexture(seed, strength = 0.08) {
-  const [c, g] = canvas(256)
-  const rnd = seeded(seed)
-  g.fillStyle = '#fff'
-  g.fillRect(0, 0, 256, 256)
-  for (let i = 0; i < 70; i++) {
-    const x = rnd() * 256
-    const y = rnd() * 256
-    const r = 10 + rnd() * 45
-    const grad = g.createRadialGradient(x, y, 0, x, y, r)
-    const a = strength * (0.3 + rnd() * 0.7)
-    grad.addColorStop(0, `rgba(70,60,50,${a})`)
-    grad.addColorStop(1, 'rgba(70,60,50,0)')
-    g.fillStyle = grad
-    g.fillRect(x - r, y - r, r * 2, r * 2)
-  }
-  // fine speckle of chipped paint
-  for (let i = 0; i < 400; i++) {
-    g.fillStyle = `rgba(40,40,40,${rnd() * 0.1})`
-    g.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 1.5, 1 + rnd() * 1.5)
-  }
-  return finish(c, { srgb: true })
-}
-
-/** Roughness breakup: green channel drives roughness (0.6–1.0 of the material's value). */
-function roughnessTexture(seed) {
-  const [c, g] = canvas(256)
-  const rnd = seeded(seed)
-  g.fillStyle = 'rgb(230,230,230)'
-  g.fillRect(0, 0, 256, 256)
-  for (let i = 0; i < 120; i++) {
-    const x = rnd() * 256
-    const y = rnd() * 256
-    const r = 6 + rnd() * 30
-    const v = Math.round(195 + rnd() * 60)
-    const grad = g.createRadialGradient(x, y, 0, x, y, r)
-    grad.addColorStop(0, `rgba(${v},${v},${v},0.45)`)
-    grad.addColorStop(1, `rgba(${v},${v},${v},0)`)
-    g.fillStyle = grad
-    g.fillRect(x - r, y - r, r * 2, r * 2)
-  }
-  // directional brushing / wipe marks
-  for (let i = 0; i < 160; i++) {
-    const v = Math.round(190 + rnd() * 60)
-    g.strokeStyle = `rgba(${v},${v},${v},0.2)`
-    g.lineWidth = 0.5 + rnd()
-    const x = rnd() * 256
-    const y = rnd() * 256
-    g.beginPath()
-    g.moveTo(x, y)
-    g.lineTo(x + 20 + rnd() * 40, y + (rnd() - 0.5) * 4)
-    g.stroke()
-  }
-  return finish(c)
-}
-
-/** Tight fabric weave for the undersuit and webbing. */
-function weaveTexture(seed) {
-  const [c, g] = canvas(128)
-  const rnd = seeded(seed)
-  g.fillStyle = '#fff'
-  g.fillRect(0, 0, 128, 128)
-  for (let i = 0; i < 128; i += 2) {
-    g.fillStyle = `rgba(0,0,0,${0.06 + rnd() * 0.04})`
-    g.fillRect(0, i, 128, 1)
-    g.fillRect(i, 0, 1, 128)
-  }
-  return finish(c, { srgb: true, repeat: 4 })
 }
 
 /** Weathered mantle cloth: sun-faded top, dust-darkened torn hem, coarse weave. */
@@ -181,56 +95,125 @@ const lazy = (factory) => {
   return () => (v ??= factory())
 }
 
-const tex = {
-  grimeA: lazy(() => grimeTexture(11)),
-  grimeB: lazy(() => grimeTexture(23, 0.12)),
-  roughA: lazy(() => roughnessTexture(5)),
-  roughB: lazy(() => roughnessTexture(9)),
-  weave: lazy(() => weaveTexture(3)),
-  mantle: lazy(mantleTextures),
-}
+const mantleTex = lazy(mantleTextures)
 
-function std(params, maps = {}) {
-  return new MeshStandardMaterial({ ...params, ...maps })
-}
+const phys = (p) => new MeshPhysicalMaterial(p)
+const stdm = (p) => new MeshStandardMaterial(p)
 
 function emissive(hex, intensity) {
-  return new MeshStandardMaterial({ color: '#050505', emissive: new Color(hex), emissiveIntensity: intensity, roughness: 0.4 })
+  return new MeshStandardMaterial({ color: '#060606', emissive: new Color(hex), emissiveIntensity: intensity, roughness: 0.35, metalness: 0 })
 }
 
-function build() {
-  const m = {
-    // --- Frontier Operative ---
-    undersuit: std({ color: '#1e1f22', roughness: 0.88, metalness: 0 }, { map: tex.weave() }),
-    webbing: std({ color: '#26231f', roughness: 0.82, metalness: 0 }, { map: tex.weave() }),
-    leather: std({ color: '#2b2520', roughness: 0.7, metalness: 0 }, { map: tex.grimeA() }),
-    armorLight: std({ color: '#a3a5a4', roughness: 0.44, metalness: 0.3 }, { map: tex.grimeA(), roughnessMap: tex.roughA() }),
-    armorGraphite: std({ color: '#2d2f33', roughness: 0.5, metalness: 0.35 }, { map: tex.grimeB(), roughnessMap: tex.roughA() }),
-    gunmetal: std({ color: '#4c4f54', roughness: 0.36, metalness: 0.85 }, { roughnessMap: tex.roughB() }),
-    helmet: std({ color: '#26282c', roughness: 0.38, metalness: 0.5 }, { roughnessMap: tex.roughA() }),
-    visorGlass: new MeshPhysicalMaterial({ color: '#07080b', roughness: 0.06, metalness: 0.1, clearcoat: 1, clearcoatRoughness: 0.05 }),
-    accentOrange: std({ color: '#c8661f', roughness: 0.55, metalness: 0.1 }, { map: tex.grimeA() }),
-    scarf: std({ color: '#55432f', roughness: 0.97, metalness: 0 }, { map: tex.weave() }),
-    mantle: (() => {
-      const { map, alphaMap } = tex.mantle()
-      return new MeshStandardMaterial({ map, alphaMap, alphaTest: 0.5, side: DoubleSide, roughness: 0.97, metalness: 0 })
-    })(),
-    blueLight: emissive('#3d8cff', 2.2),
-    blueLightDim: emissive('#3d8cff', 0.9),
+// Detail presets (scale in tiles per metre).
+const FABRIC = (scale, bump, extra = {}) => ({ kind: 'fabric', scale, bump, rough: 0.18, color: 0.1, ...extra })
+const HARD = (scale, bump, rough, color, wear) => ({ kind: 'hard', scale, bump, rough, color, wear })
 
-    // --- Security Droid ---
-    droidGunmetal: std({ color: '#3a3c40', roughness: 0.38, metalness: 0.85 }, { map: tex.grimeB(), roughnessMap: tex.roughB() }),
-    droidComposite: std({ color: '#18191b', roughness: 0.55, metalness: 0.25 }, { map: tex.grimeA(), roughnessMap: tex.roughA() }),
-    droidPlate: std({ color: '#5d6065', roughness: 0.46, metalness: 0.7 }, { map: tex.grimeA() }),
-    droidHydraulic: std({ color: '#6f7277', roughness: 0.32, metalness: 1 }),
-    droidRubber: std({ color: '#121212', roughness: 0.9, metalness: 0 }),
+function build() {
+  const mantleMaps = mantleTex()
+  const mantleBump = detailTextures().fabric.clone()
+  mantleBump.repeat.set(9, 18)
+  mantleBump.needsUpdate = true
+
+  const m = {
+    // ===== Frontier Operative =====
+    // Tactical undersuit: matte synthetic weave with a faint cool sheen.
+    undersuit: withSurface(phys({ color: '#2e2f31', roughness: 0.88, metalness: 0, sheen: 0.5, sheenRoughness: 0.65, sheenColor: '#58595b' }), FABRIC(14, 0.55)),
+    // Webbing straps: coarser, slightly warmer nylon.
+    webbing: withSurface(phys({ color: '#34322c', roughness: 0.84, metalness: 0, sheen: 0.4, sheenRoughness: 0.7, sheenColor: '#6b675a' }), FABRIC(30, 0.6)),
+    // Pouches / glove palms: worn synthetic leather.
+    leather: withSurface(stdm({ color: '#2f2924', roughness: 0.62, metalness: 0 }), HARD(9, 0.2, 0.3, 0.12)),
+    // Light composite plates: matte-satin ceramic coating, chips reveal the darker substrate.
+    armorLight: withSurface(
+      phys({ color: '#a4a6a5', roughness: 0.46, metalness: 0, clearcoat: 0.25, clearcoatRoughness: 0.45 }),
+      HARD(5, 0.1, 0.22, 0.07, { amount: 1, color: '#55585b', roughness: 0.72, metalness: 0, threshold: 0.6 })
+    ),
+    // Charcoal hard armour: coated composite, controlled highlights, light scuffing on edges.
+    armorGraphite: withSurface(
+      phys({ color: '#363739', roughness: 0.44, metalness: 0, clearcoat: 0.2, clearcoatRoughness: 0.5 }),
+      HARD(5, 0.1, 0.25, 0.07, { amount: 0.55, color: '#4b4e51', roughness: 0.58, metalness: 0, threshold: 0.66 })
+    ),
+    // Helmet shell: same coating family, a little glossier so the head reads first.
+    helmet: withSurface(
+      phys({ color: '#2e2f31', roughness: 0.34, metalness: 0, clearcoat: 0.55, clearcoatRoughness: 0.22 }),
+      HARD(6, 0.06, 0.25, 0.05, { amount: 0.5, color: '#62666c', roughness: 0.5, metalness: 0, threshold: 0.63 })
+    ),
+    // Exposed hardware (buckles, ear modules, toe caps, hilt, barrel): blasted steel with polished worn edges.
+    gunmetal: withSurface(
+      stdm({ color: '#8a8d92', roughness: 0.38, metalness: 1 }),
+      HARD(8, 0.05, 0.35, 0.05, { amount: 0.6, color: '#b7babe', roughness: 0.2, metalness: 1, threshold: 0.56 })
+    ),
+    // Rubber seals and soles.
+    rubber: withSurface(stdm({ color: '#19191a', roughness: 0.86, metalness: 0 }), HARD(14, 0.12, 0.12, 0.04)),
+    // Visor: near-black tinted glass with a mirror clearcoat (reflections carry the shape).
+    visorGlass: phys({ color: '#050608', roughness: 0.06, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.03, ior: 1.52, specularIntensity: 1 }),
+    // Burnt-orange paint accents: same coating as the armour, chipping to substrate.
+    accentOrange: withSurface(
+      phys({ color: '#a8561d', roughness: 0.5, metalness: 0, clearcoat: 0.2, clearcoatRoughness: 0.5 }),
+      HARD(6, 0.08, 0.2, 0.06, { amount: 1, color: '#3e4043', roughness: 0.7, metalness: 0, threshold: 0.6 })
+    ),
+    // Scarf: heavy, faded cotton.
+    scarf: withSurface(phys({ color: '#56442f', roughness: 0.95, metalness: 0, sheen: 0.8, sheenRoughness: 0.8, sheenColor: '#8a7459' }), FABRIC(9, 0.9, { color: 0.16 })),
+    // Mantle: UV-mapped (it deforms, so object-space detail would swim) with a woven bump.
+    mantle: phys({
+      map: mantleMaps.map,
+      alphaMap: mantleMaps.alphaMap,
+      alphaTest: 0.5,
+      side: DoubleSide,
+      roughness: 0.95,
+      metalness: 0,
+      sheen: 0.75,
+      sheenRoughness: 0.8,
+      sheenColor: '#7b6850',
+      bumpMap: mantleBump,
+      bumpScale: 1.2,
+    }),
+    // Blue emissive hierarchy: visor optics > pistol energy cell > pack status > hilt indicator.
+    blueLight: emissive('#3d8cff', 2.4),
+    energyCell: emissive('#3d8cff', 1.4),
+    packStatus: emissive('#3d8cff', 0.8),
+    blueLightDim: emissive('#3d8cff', 0.55),
+
+    // ===== Security Droid =====
+    // Dark powder-coated armour shells: satin, faint orange peel, chips expose steel.
+    droidComposite: withSurface(
+      phys({ color: '#29292b', roughness: 0.64, metalness: 0 }),
+      HARD(5, 0.2, 0.15, 0.07, { amount: 0.8, color: '#7f8287', roughness: 0.34, metalness: 1, threshold: 0.66 })
+    ),
+    // Hull (torso, head dome, cannon housing): dark painted steel with a thin protective coat.
+    droidHull: withSurface(
+      phys({ color: '#3a3a3c', roughness: 0.46, metalness: 0, clearcoat: 0.18, clearcoatRoughness: 0.4 }),
+      HARD(4, 0.12, 0.2, 0.06, { amount: 0.85, color: '#8c8f94', roughness: 0.3, metalness: 1, threshold: 0.62 })
+    ),
+    // Lighter grey painted plates.
+    droidPlate: withSurface(
+      phys({ color: '#5f6062', roughness: 0.56, metalness: 0 }),
+      HARD(5, 0.18, 0.15, 0.06, { amount: 0.85, color: '#9a9da2', roughness: 0.3, metalness: 1, threshold: 0.64 })
+    ),
+    // Exposed structural metal (limb cores, frame, neck): parkerized steel, worn bright on edges.
+    droidGunmetal: withSurface(
+      stdm({ color: '#5e5f62', roughness: 0.45, metalness: 1 }),
+      HARD(7, 0.06, 0.35, 0.05, { amount: 0.6, color: '#a2a5aa', roughness: 0.25, metalness: 1, threshold: 0.56 })
+    ),
+    // Actuator housings at knees/elbows/hips: machined metal, slightly finer finish.
+    droidHydraulic: withSurface(stdm({ color: '#6d7075', roughness: 0.34, metalness: 1 }), HARD(9, 0.04, 0.3, 0.04)),
+    // Piston rods: polished chrome.
+    droidPiston: stdm({ color: '#c2c5c9', roughness: 0.14, metalness: 1 }),
+    // Joint boots, bellows and soles.
+    droidRubber: withSurface(stdm({ color: '#161617', roughness: 0.85, metalness: 0 }), HARD(12, 0.14, 0.12, 0.04)),
+    // Heat-affected weapon metal: straw/bronze temper tint near the muzzle.
+    droidHeatMetal: withSurface(stdm({ color: '#6f6052', roughness: 0.4, metalness: 1 }), HARD(9, 0.05, 0.3, 0.12)),
+    // Optic cover: dark red-tinted glass, separate from the operative's visor.
+    droidLens: phys({ color: '#140404', roughness: 0.03, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.02, ior: 1.52 }),
     orangeLight: emissive('#ff7a1a', 1.6),
   }
+  // Glass reads by its reflections: give it a little more of the environment.
+  m.visorGlass.userData.envBoost = 1.4
+  m.droidLens.userData.envBoost = 1.4
   m.all = Object.values(m)
   return m
 }
 
-/** Shared character materials, created on first use (needs a DOM for canvas textures). */
+/** Shared character materials, created on first use (needs a DOM for the mantle canvas). */
 export const charMaterials = lazy(build)
 
 /** Per-instance emissive material whose intensity is animated at runtime. */
@@ -240,13 +223,12 @@ export function dynamicEmissive(hex, intensity = 1) {
 
 /**
  * Give character materials reflections from a pre-filtered environment map.
- * Metals and the visor need something to reflect or they read as flat black.
- * Applied only to characters so the level's lighting is unchanged.
+ * Metals and glass need something to reflect or they read as flat black.
  */
 export function applyCharacterEnvironment(envMap, intensity) {
   for (const mat of charMaterials().all) {
     mat.envMap = envMap
-    mat.envMapIntensity = intensity
+    mat.envMapIntensity = intensity * (mat.userData.envBoost ?? 1)
     mat.needsUpdate = true
   }
 }

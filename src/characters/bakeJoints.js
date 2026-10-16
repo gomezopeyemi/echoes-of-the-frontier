@@ -1,4 +1,4 @@
-import { Matrix4, Mesh } from 'three'
+import { Float32BufferAttribute, Matrix4, Mesh } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 // Draw-call reduction for rigid-segment characters.
@@ -10,7 +10,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 // flagged `userData.bake` are flattened into their joint.
 
 const tmp = new Matrix4()
-const KEEP = new Set(['position', 'normal', 'uv'])
+const KEEP = new Set(['position', 'normal', 'uv', 'surfEdge'])
 
 function collect(node, parentMatrix, out) {
   for (const child of node.children) {
@@ -41,6 +41,8 @@ export function bakeJoints(joints) {
       const geos = list.map(({ mesh, matrix }) => {
         const src = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone()
         for (const name of Object.keys(src.attributes)) if (!KEEP.has(name)) src.deleteAttribute(name)
+        // Only rounded boxes have edge data; everything else counts as flat.
+        if (!src.attributes.surfEdge) src.setAttribute('surfEdge', new Float32BufferAttribute(new Float32Array(src.attributes.position.count), 1))
         return src.applyMatrix4(matrix)
       })
       const merged = mergeGeometries(geos, false)

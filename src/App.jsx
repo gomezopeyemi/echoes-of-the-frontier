@@ -38,7 +38,7 @@ export default function App() {
   return (
     <div className="app">
       <Canvas
-        shadows
+        shadows="percentage"
         dpr={[1, 1.75]}
         gl={{ antialias: false, powerPreference: 'high-performance' }}
         camera={{ fov: CAMERA.fov, near: 0.1, far: 500, position: [SPAWN.x, 3, SPAWN.z + 5] }}

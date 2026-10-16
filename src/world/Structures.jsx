@@ -28,7 +28,7 @@ function Hab({ x, z, w, d, h }) {
       <mesh position={[w * 0.28, 1.2, doorZ]} material={MAT.hullDark}>
         <planeGeometry args={[1.5, 2.4]} />
       </mesh>
-      <mesh position={[w * 0.28, 2.55, doorZ + 0.01]} material={MAT.amber}>
+      <mesh position={[w * 0.28, 2.55, doorZ + 0.01]} material={MAT.ice}>
         <planeGeometry args={[1.5, 0.08]} />
       </mesh>
       {/* Roof vents */}
@@ -51,7 +51,7 @@ function Wall({ x, z, w, d, h }) {
       <mesh position={[0, 0.6, d / 2 + 0.01]} material={MAT.hazardStripe}>
         <planeGeometry args={[w, 0.3]} />
       </mesh>
-      <mesh position={[0, h - 0.3, d / 2 + 0.01]} material={MAT.amber}>
+      <mesh position={[0, h - 0.3, d / 2 + 0.01]} material={MAT.ice}>
         <planeGeometry args={[w * 0.9, 0.05]} />
       </mesh>
     </group>
